@@ -29,7 +29,6 @@ function App() {
   const [counterTeam, setCounterTeam] = useState([]);
   const [counterGear, setCounterGear] = useState({});
   const [description, setDescription] = useState('');
-  const [userId, setUserId] = useState('user_' + Math.random().toString(36).substr(2, 9));
 
   // Top builds
   const [topBuilds, setTopBuilds] = useState([]);
