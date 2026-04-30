@@ -29,6 +29,7 @@ function App() {
   const [counterTeam, setCounterTeam] = useState([]);
   const [counterGear, setCounterGear] = useState({});
   const [description, setDescription] = useState('');
+  const [userId, setUserId] = useState('user_' + Math.random().toString(36).substr(2, 9));
 
   // Top builds
   const [topBuilds, setTopBuilds] = useState([]);
@@ -90,6 +91,7 @@ function App() {
 
     try {
       await axios.post(`${API_URL}/api/submit-build`, {
+        user_id: userId,
         opponent_team: opponentTeam.filter(c => c),
         counter_team: counterTeam.filter(c => c),
         gear_setup: counterGear,
@@ -111,6 +113,7 @@ function App() {
     try {
       await axios.post(`${API_URL}/api/vote`, {
         build_id: buildId,
+        user_id: userId,
         vote_type: 'like'
       });
       fetchTopBuilds();
