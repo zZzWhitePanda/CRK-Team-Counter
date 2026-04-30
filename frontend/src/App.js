@@ -90,7 +90,6 @@ function App() {
 
     try {
       await axios.post(`${API_URL}/api/submit-build`, {
-        user_id: userId,
         opponent_team: opponentTeam.filter(c => c),
         counter_team: counterTeam.filter(c => c),
         gear_setup: counterGear,
@@ -112,7 +111,6 @@ function App() {
     try {
       await axios.post(`${API_URL}/api/vote`, {
         build_id: buildId,
-        user_id: userId,
         vote_type: 'like'
       });
       fetchTopBuilds();
