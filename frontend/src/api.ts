@@ -6,6 +6,13 @@
 // backend).
 // ============================================================
 
+// Where the backend lives. In development this is '' (empty), so
+// requests go to the same address and Vite's proxy forwards them
+// to localhost:4000. In production (Vercel) the backend is a
+// different server, so its address is set with the VITE_API_URL
+// environment variable when the site is built.
+const API_BASE: string = import.meta.env.VITE_API_URL ?? '';
+
 // ---- shapes of the data the API sends back ----
 
 export interface Cookie {
@@ -46,13 +53,31 @@ export interface LookupResult {
 
 // ---- helper: fetch + throw a readable error if it failed ----
 async function getJson<T>(url: string, options?: RequestInit): Promise<T> {
-    const response = await fetch(url, options);
-    if (!response.ok) {
-        // the backend sends { error: "friendly message" } on failures
-        const body = await response.json().catch(() => null);
-        throw new Error(body?.error ?? 'Something went wrong talking to the server.');
+    let response: Response;
+    try {
+        response = await fetch(API_BASE + url, options);
+    } catch {
+        // network dropped mid-request (user offline, server down)
+        throw new Error("Can't reach the server right now — check your connection and try again.");
     }
-    return response.json();
+
+    // Read the reply as text first, then try to turn it into JSON.
+    // If the backend is down/misconfigured the reply might be an
+    // HTML error page - parsing that with .json() would throw a
+    // confusing technical error at the user, which UC07 forbids.
+    const text = await response.text();
+    let body: { error?: string } | null = null;
+    try {
+        body = JSON.parse(text);
+    } catch {
+        body = null; // reply wasn't JSON - treat as server unavailable
+    }
+
+    if (!response.ok || body === null) {
+        // the backend sends { error: "friendly message" } on failures
+        throw new Error(body?.error ?? "The server isn't available right now — please try again later.");
+    }
+    return body as T;
 }
 
 // ---- the actual endpoints ----
@@ -83,5 +108,5 @@ export function getTopTeams() {
 
 // where a cookie's portrait lives (served by the backend)
 export function cookieImageUrl(imageFile: string) {
-    return '/images/cookies/' + imageFile;
+    return API_BASE + '/images/cookies/' + imageFile;
 }
