@@ -16,6 +16,15 @@ dotenv.config();
 
 export const pool = new Pool({
     connectionString: process.env.DATABASE_URL,
+
+    // Cloud databases (like Neon, where the live site's data
+    // lives) only accept encrypted connections, so SSL is turned
+    // on by setting DATABASE_SSL=true in that environment.
+    // The local database on my own machine doesn't use SSL,
+    // so locally the variable just stays unset.
+    ssl: process.env.DATABASE_SSL === 'true'
+        ? { rejectUnauthorized: false }
+        : undefined,
 });
 
 // Small helper so route files can run a query in one line.
