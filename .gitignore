@@ -1,36 +1,13 @@
-# Dependencies
+# dependencies get reinstalled from package.json, never committed
 node_modules/
-*/node_modules/
 
-# Environment variables
+# secrets (database passwords etc.) stay local - .env.example shows the shape
 .env
-*/.env
 
-# Build files
-build/
+# build output
 dist/
-*/build/
-*/dist/
+build/
 
-# Logs
-*.log
-npm-debug.log*
-
-# OS files
+# editor + OS junk
 .DS_Store
-Thumbs.db
-
-# IDE
-.vscode/
-.idea/
-*.swp
-*.swo
-
-# Testing
-coverage/
-
-# Production
-*.tgz
-
-# Misc
-.cache/
+*.log
