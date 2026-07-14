@@ -1,0 +1,217 @@
+/* ============================================================
+   theme.css - the ONLY place colors are defined.
+   Every value comes from design-system/crk-team-builder/MASTER.md
+   (which comes from my Unit 3 mockups). Components use the
+   var(--...) names, never raw hex, so restyling = edit one file.
+   ============================================================ */
+
+:root {
+    /* surfaces */
+    --color-sidebar: #202442;
+    --color-bg: #25294A;
+    --color-card: #1D2140;
+    --color-input: #171A33;
+
+    /* actions */
+    --color-primary: #8B7CF6;
+    --color-primary-hover: #A395FF;
+    --color-secondary: #5B6FD8;
+
+    /* meaning colors - red is ALWAYS the enemy, cyan ALWAYS you */
+    --color-rank: #2DD4BF;
+    --color-enemy: #F87171;
+    --color-ally: #22D3EE;
+    --color-danger: #EF4444;
+
+    /* text */
+    --color-text: #FFFFFF;
+    --color-text-body: #C7CBE8;
+    --color-text-muted: #8A90B8;
+
+    --color-border: #34395E;
+
+    /* one shared spacing rhythm (8px system) and type scale */
+    --radius: 12px;
+    --radius-small: 8px;
+
+    --font-heading: 'Russo One', sans-serif;
+    --font-body: 'Chakra Petch', sans-serif;
+}
+
+/* ---- base ---- */
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+    background: var(--color-bg);
+    color: var(--color-text-body);
+    font-family: var(--font-body);
+    font-size: 16px;
+    line-height: 1.5;
+}
+
+h1, h2, h3 {
+    font-family: var(--font-heading);
+    color: var(--color-text);
+    font-weight: 400; /* Russo One only has one weight */
+}
+h1 { font-size: 32px; }
+h2 { font-size: 24px; }
+h3 { font-size: 18px; }
+
+/* keyboard users always see where they are (accessibility rule) */
+:focus-visible {
+    outline: 2px solid var(--color-primary);
+    outline-offset: 2px;
+}
+
+/* respect users who turn animations off */
+@media (prefers-reduced-motion: reduce) {
+    * { transition: none !important; animation: none !important; }
+}
+
+/* ---- app layout: sidebar + content ---- */
+.app-layout {
+    display: flex;
+    min-height: 100dvh;
+}
+
+.content {
+    flex: 1;
+    padding: 32px;
+    max-width: 1200px;
+}
+
+/* ---- sidebar (mockups: dark rail, logo, 4 blue buttons) ---- */
+.sidebar {
+    width: 230px;
+    flex-shrink: 0;
+    background: var(--color-sidebar);
+    padding: 24px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.sidebar-logo {
+    font-family: var(--font-heading);
+    color: var(--color-text);
+    font-size: 28px;
+    padding: 0 8px 4px;
+}
+.sidebar-logo small {
+    display: block;
+    font-size: 14px;
+    color: var(--color-text-muted);
+}
+
+.nav-button {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+    min-height: 48px;              /* touch target rule */
+    border: none;
+    border-radius: var(--radius-small);
+    background: transparent;
+    color: var(--color-text-body);
+    font-family: var(--font-body);
+    font-size: 16px;
+    font-weight: 600;
+    text-decoration: none;
+    cursor: pointer;
+    transition: background 200ms ease-out, color 200ms ease-out;
+}
+.nav-button:hover { background: var(--color-secondary); color: var(--color-text); }
+.nav-button.active { background: var(--color-secondary); color: var(--color-text); }
+
+/* ---- phones: sidebar becomes a bottom bar (NFR04) ---- */
+@media (max-width: 767px) {
+    .app-layout { flex-direction: column-reverse; }
+
+    .sidebar {
+        width: 100%;
+        flex-direction: row;
+        justify-content: space-around;
+        padding: 8px;
+        position: sticky;
+        bottom: 0;
+        border-top: 1px solid var(--color-border);
+    }
+    .sidebar-logo { display: none; }
+
+    .nav-button {
+        flex-direction: column;
+        gap: 4px;
+        font-size: 12px;
+        padding: 8px;
+        flex: 1;
+        text-align: center;
+    }
+
+    .content { padding: 16px; }
+}
+
+/* ---- shared pieces ---- */
+.card {
+    background: var(--color-card);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+    padding: 24px;
+}
+
+.pill {
+    padding: 8px 16px;
+    min-height: 40px;
+    border-radius: 999px;
+    border: none;
+    background: var(--color-input);
+    color: var(--color-text-body);
+    font-family: var(--font-body);
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 200ms ease-out, color 200ms ease-out;
+}
+.pill:hover { color: var(--color-text); }
+.pill.active { background: var(--color-primary); color: var(--color-text); }
+
+.btn-primary {
+    padding: 12px 24px;
+    min-height: 44px;
+    border: none;
+    border-radius: var(--radius-small);
+    background: var(--color-primary);
+    color: var(--color-text);
+    font-family: var(--font-body);
+    font-size: 16px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: background 200ms ease-out;
+}
+.btn-primary:hover { background: var(--color-primary-hover); }
+.btn-primary:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+}
+
+.input, select.input {
+    width: 100%;
+    padding: 12px 16px;
+    min-height: 44px;
+    background: var(--color-input);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-small);
+    color: var(--color-text);
+    font-family: var(--font-body);
+    font-size: 16px;
+}
+
+.error-box {
+    background: color-mix(in srgb, var(--color-danger) 15%, var(--color-card));
+    border: 1px solid var(--color-danger);
+    border-radius: var(--radius-small);
+    padding: 12px 16px;
+    color: var(--color-text);
+}
+
+.muted { color: var(--color-text-muted); }
