@@ -57,7 +57,7 @@ export function CommunityBuildsPage() {
             )}
 
             {builds.map((build, index) => (
-                <div key={build.build_id} className="card" style={{ marginBottom: 16 }}>
+                <div key={build.build_id} className="card card-interactive" style={{ marginBottom: 16 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 4, flexWrap: 'wrap' }}>
                         {/* rank badge - teal square like mockup 1 */}
                         <span

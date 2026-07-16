@@ -162,7 +162,7 @@ export function CounterToolPage() {
                 <section style={{ marginBottom: 24 }}>
                     <h2 style={{ marginBottom: 12 }}>Meta Counters</h2>
                     {results.metaTeams.map(team => (
-                        <div key={team.meta_team_id} className="card" style={{ marginBottom: 12 }}>
+                        <div key={team.meta_team_id} className="card card-interactive" style={{ marginBottom: 12 }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>
                                 <h3>{team.team_name}</h3>
                                 <span style={{ color: 'var(--color-rank)', fontWeight: 700 }}>
@@ -182,7 +182,7 @@ export function CounterToolPage() {
                 <section>
                     <h2 style={{ marginBottom: 12 }}>Community Counters</h2>
                     {results.playerTeams.map(build => (
-                        <div key={build.build_id} className="card" style={{ marginBottom: 12 }}>
+                        <div key={build.build_id} className="card card-interactive" style={{ marginBottom: 12 }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>
                                 <span className="muted">by {build.username}</span>
                                 <span style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--color-primary)' }}>

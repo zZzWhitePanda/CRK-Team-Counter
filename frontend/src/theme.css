@@ -1,38 +1,65 @@
 /* ============================================================
-   theme.css - the ONLY place colors are defined.
-   Every value comes from design-system/crk-team-builder/MASTER.md
-   (which comes from my Unit 3 mockups). Components use the
-   var(--...) names, never raw hex, so restyling = edit one file.
+   theme.css - the ONLY place colors and shared styles live.
+   Built from design-system/DESIGN.md (mockup palette) then
+   levelled up using the ui-ux-pro-max "Modern Dark" guidance:
+   layered depth instead of flat fills, hairline highlights,
+   an accent glow behind the primary button, and hover lift on
+   cards. All effects are CSS-only (no JS animation) so the
+   page stays fast to use mid-battle.
+
+   Components use the var(--...) names, never raw hex, so
+   restyling the whole site = editing this one block.
    ============================================================ */
 
 :root {
-    /* surfaces */
-    --color-sidebar: #202442;
-    --color-bg: #25294A;
-    --color-card: #1D2140;
-    --color-input: #171A33;
+    /* ---- surfaces: a depth ladder, deep -> raised ---- */
+    --color-bg-deep: #14162B;      /* darkest, behind everything */
+    --color-bg: #1B1E3A;           /* main page background */
+    --color-sidebar: #171A33;      /* nav rail */
+    --color-card: #242850;         /* raised cards/panels */
+    --color-card-hover: #2A2F5E;   /* card when hovered */
+    --color-input: #12152B;        /* inputs sit BELOW the card */
 
-    /* actions */
+    /* ---- actions ---- */
     --color-primary: #8B7CF6;
     --color-primary-hover: #A395FF;
     --color-secondary: #5B6FD8;
+    --gradient-primary: linear-gradient(135deg, #8B7CF6 0%, #6D5FE0 100%);
 
-    /* meaning colors - red is ALWAYS the enemy, cyan ALWAYS you */
+    /* ---- meaning colors - red is ALWAYS enemy, cyan ALWAYS you ---- */
     --color-rank: #2DD4BF;
     --color-enemy: #F87171;
     --color-ally: #22D3EE;
     --color-danger: #EF4444;
 
-    /* text */
+    /* ---- rarity accents (colour-codes the roster) ---- */
+    --rarity-common: #9AA3C0;
+    --rarity-rare: #4AA3F0;
+    --rarity-special: #F0A64A;
+    --rarity-epic: #B57BEE;
+    --rarity-super-epic: #E85D9E;
+    --rarity-dragon: #F0C24A;
+    --rarity-legendary: #4AD6C0;
+    --rarity-ancient: #F0D060;
+    --rarity-beast: #EF6B6B;
+    --rarity-witch: #A24AF0;
+
+    /* ---- text ---- */
     --color-text: #FFFFFF;
     --color-text-body: #C7CBE8;
-    --color-text-muted: #8A90B8;
+    --color-text-muted: #868CB8;
 
-    --color-border: #34395E;
+    /* ---- lines + glow ---- */
+    --color-border: rgba(255, 255, 255, 0.08);   /* hairline highlight */
+    --color-border-strong: rgba(255, 255, 255, 0.14);
+    --glow-primary: 0 0 24px rgba(139, 124, 246, 0.45);
+    --shadow-card: 0 4px 16px rgba(0, 0, 0, 0.35);
+    --shadow-card-hover: 0 10px 28px rgba(0, 0, 0, 0.45);
 
-    /* one shared spacing rhythm (8px system) and type scale */
-    --radius: 12px;
-    --radius-small: 8px;
+    /* ---- shape, motion, type ---- */
+    --radius: 14px;
+    --radius-small: 10px;
+    --ease: cubic-bezier(0.16, 1, 0.3, 1);   /* smooth "expo out" */
 
     --font-heading: 'Russo One', sans-serif;
     --font-body: 'Chakra Petch', sans-serif;
@@ -42,23 +69,32 @@
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
 body {
-    background: var(--color-bg);
+    /* layered background: a soft purple glow up top fading into
+       the deep navy, instead of one flat colour. Fixed so it
+       doesn't scroll. */
+    background:
+        radial-gradient(1200px 600px at 70% -10%, rgba(139, 124, 246, 0.18), transparent 60%),
+        radial-gradient(900px 500px at 0% 100%, rgba(45, 212, 191, 0.08), transparent 55%),
+        var(--color-bg-deep);
+    background-attachment: fixed;
     color: var(--color-text-body);
     font-family: var(--font-body);
     font-size: 16px;
     line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
 }
 
 h1, h2, h3 {
     font-family: var(--font-heading);
     color: var(--color-text);
-    font-weight: 400; /* Russo One only has one weight */
+    font-weight: 400;
+    letter-spacing: 0.5px;
 }
-h1 { font-size: 32px; }
+h1 { font-size: 34px; }
 h2 { font-size: 24px; }
 h3 { font-size: 18px; }
 
-/* keyboard users always see where they are (accessibility rule) */
+/* keyboard users always see where they are (accessibility) */
 :focus-visible {
     outline: 2px solid var(--color-primary);
     outline-offset: 2px;
@@ -77,31 +113,45 @@ h3 { font-size: 18px; }
 
 .content {
     flex: 1;
-    padding: 32px;
-    max-width: 1200px;
+    padding: 40px 48px;
+    max-width: 1240px;
+    width: 100%;
 }
 
-/* ---- sidebar (mockups: dark rail, logo, 4 blue buttons) ---- */
+/* ---- sidebar ---- */
 .sidebar {
-    width: 230px;
+    width: 240px;
     flex-shrink: 0;
-    background: var(--color-sidebar);
-    padding: 24px 16px;
+    background: linear-gradient(180deg, var(--color-sidebar) 0%, var(--color-bg-deep) 100%);
+    border-right: 1px solid var(--color-border);
+    padding: 28px 16px;
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: 6px;
+    position: sticky;
+    top: 0;
+    height: 100dvh;
 }
 
 .sidebar-logo {
     font-family: var(--font-heading);
     color: var(--color-text);
-    font-size: 28px;
-    padding: 0 8px 4px;
+    font-size: 30px;
+    letter-spacing: 1px;
+    padding: 0 12px 20px;
+    /* subtle gradient text for the logo */
+    background: linear-gradient(135deg, #FFFFFF 0%, #B9AEFF 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
 }
 .sidebar-logo small {
     display: block;
-    font-size: 14px;
+    font-size: 13px;
+    letter-spacing: 2px;
     color: var(--color-text-muted);
+    -webkit-text-fill-color: var(--color-text-muted);
+    margin-top: 2px;
 }
 
 .nav-button {
@@ -109,20 +159,39 @@ h3 { font-size: 18px; }
     align-items: center;
     gap: 12px;
     padding: 12px 16px;
-    min-height: 48px;              /* touch target rule */
+    min-height: 48px;
     border: none;
     border-radius: var(--radius-small);
     background: transparent;
-    color: var(--color-text-body);
+    color: var(--color-text-muted);
     font-family: var(--font-body);
-    font-size: 16px;
+    font-size: 15px;
     font-weight: 600;
     text-decoration: none;
     cursor: pointer;
-    transition: background 200ms ease-out, color 200ms ease-out;
+    position: relative;
+    transition: background 250ms var(--ease), color 250ms var(--ease), transform 150ms var(--ease);
 }
-.nav-button:hover { background: var(--color-secondary); color: var(--color-text); }
-.nav-button.active { background: var(--color-secondary); color: var(--color-text); }
+.nav-button:hover {
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--color-text);
+}
+.nav-button.active {
+    background: linear-gradient(135deg, rgba(139, 124, 246, 0.22), rgba(91, 111, 216, 0.14));
+    color: var(--color-text);
+}
+/* glowing accent bar on the active page */
+.nav-button.active::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 20%;
+    height: 60%;
+    width: 3px;
+    border-radius: 3px;
+    background: var(--color-primary);
+    box-shadow: var(--glow-primary);
+}
 
 /* ---- phones: sidebar becomes a bottom bar (NFR04) ---- */
 @media (max-width: 767px) {
@@ -130,88 +199,171 @@ h3 { font-size: 18px; }
 
     .sidebar {
         width: 100%;
+        height: auto;
         flex-direction: row;
         justify-content: space-around;
         padding: 8px;
-        position: sticky;
-        bottom: 0;
+        border-right: none;
         border-top: 1px solid var(--color-border);
+        background: var(--color-sidebar);
     }
     .sidebar-logo { display: none; }
 
     .nav-button {
         flex-direction: column;
         gap: 4px;
-        font-size: 12px;
-        padding: 8px;
+        font-size: 11px;
+        padding: 8px 4px;
         flex: 1;
         text-align: center;
+        min-height: 0;
     }
+    .nav-button.active::before { display: none; }
 
-    .content { padding: 16px; }
+    .content { padding: 20px 16px 32px; }
 }
 
-/* ---- shared pieces ---- */
+/* ---- cards ---- */
 .card {
     background: var(--color-card);
     border: 1px solid var(--color-border);
     border-radius: var(--radius);
     padding: 24px;
+    box-shadow: var(--shadow-card);
+    /* hairline highlight along the very top edge = subtle depth */
+    position: relative;
+}
+.card::before {
+    content: '';
+    position: absolute;
+    inset: 0 0 auto 0;
+    height: 1px;
+    border-radius: var(--radius) var(--radius) 0 0;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.16), transparent);
 }
 
+/* cards that lift on hover (interactive lists) */
+.card-interactive {
+    transition: transform 250ms var(--ease), box-shadow 250ms var(--ease),
+                background 250ms var(--ease), border-color 250ms var(--ease);
+}
+.card-interactive:hover {
+    transform: translateY(-3px);
+    background: var(--color-card-hover);
+    border-color: var(--color-border-strong);
+    box-shadow: var(--shadow-card-hover);
+}
+
+/* ---- pills (filters) ---- */
 .pill {
     padding: 8px 16px;
     min-height: 40px;
     border-radius: 999px;
-    border: none;
+    border: 1px solid transparent;
     background: var(--color-input);
     color: var(--color-text-body);
     font-family: var(--font-body);
-    font-size: 14px;
+    font-size: 13px;
     font-weight: 600;
+    letter-spacing: 0.3px;
     cursor: pointer;
-    transition: background 200ms ease-out, color 200ms ease-out;
+    transition: background 200ms var(--ease), color 200ms var(--ease),
+                border-color 200ms var(--ease), transform 120ms var(--ease);
 }
-.pill:hover { color: var(--color-text); }
-.pill.active { background: var(--color-primary); color: var(--color-text); }
+.pill:hover { color: var(--color-text); border-color: var(--color-border-strong); }
+.pill:active { transform: scale(0.96); }
+.pill.active {
+    background: var(--gradient-primary);
+    color: var(--color-text);
+    border-color: transparent;
+    box-shadow: 0 0 16px rgba(139, 124, 246, 0.35);
+}
 
+/* ---- buttons ---- */
 .btn-primary {
-    padding: 12px 24px;
-    min-height: 44px;
+    padding: 13px 26px;
+    min-height: 46px;
     border: none;
     border-radius: var(--radius-small);
-    background: var(--color-primary);
+    background: var(--gradient-primary);
     color: var(--color-text);
-    font-family: var(--font-body);
-    font-size: 16px;
-    font-weight: 700;
+    font-family: var(--font-heading);
+    font-size: 15px;
+    letter-spacing: 0.5px;
     cursor: pointer;
-    transition: background 200ms ease-out;
+    box-shadow: var(--glow-primary);
+    transition: filter 200ms var(--ease), transform 120ms var(--ease), box-shadow 200ms var(--ease);
 }
-.btn-primary:hover { background: var(--color-primary-hover); }
+.btn-primary:hover { filter: brightness(1.1); box-shadow: 0 0 32px rgba(139, 124, 246, 0.6); }
+.btn-primary:active { transform: scale(0.97); }
 .btn-primary:disabled {
-    opacity: 0.45;
+    opacity: 0.5;
     cursor: not-allowed;
+    box-shadow: none;
+    filter: grayscale(0.3);
 }
 
+/* ---- inputs ---- */
 .input, select.input {
     width: 100%;
     padding: 12px 16px;
-    min-height: 44px;
+    min-height: 46px;
     background: var(--color-input);
     border: 1px solid var(--color-border);
     border-radius: var(--radius-small);
     color: var(--color-text);
     font-family: var(--font-body);
-    font-size: 16px;
+    font-size: 15px;
+    transition: border-color 200ms var(--ease), box-shadow 200ms var(--ease);
+}
+.input:focus, select.input:focus {
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 3px rgba(139, 124, 246, 0.18);
+    outline: none;
 }
 
+/* ---- error + empty states ---- */
 .error-box {
-    background: color-mix(in srgb, var(--color-danger) 15%, var(--color-card));
-    border: 1px solid var(--color-danger);
+    background: linear-gradient(135deg, rgba(239, 68, 68, 0.16), rgba(239, 68, 68, 0.06));
+    border: 1px solid rgba(239, 68, 68, 0.5);
     border-radius: var(--radius-small);
-    padding: 12px 16px;
+    padding: 14px 18px;
     color: var(--color-text);
 }
 
+/* ---- skeleton loader (shimmer while data loads) ---- */
+.skeleton {
+    background: linear-gradient(90deg,
+        var(--color-card) 25%,
+        var(--color-card-hover) 37%,
+        var(--color-card) 63%);
+    background-size: 400% 100%;
+    animation: shimmer 1.4s ease-in-out infinite;
+    border-radius: var(--radius-small);
+}
+@keyframes shimmer {
+    0% { background-position: 100% 0; }
+    100% { background-position: -100% 0; }
+}
+
+/* ---- small helpers ---- */
 .muted { color: var(--color-text-muted); }
+
+.section-title {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 16px;
+}
+
+/* a thin coloured chip used for type/position/rarity tags */
+.tag {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 600;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid var(--color-border);
+    color: var(--color-text-body);
+}

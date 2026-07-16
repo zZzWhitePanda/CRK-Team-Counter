@@ -83,6 +83,21 @@ every surface it sits on; muted text is only used at 16px+.
 - No horizontal scroll at 375px; test 375 / 768 / 1024 / 1440
 - Semantic tokens only in components — no raw hex outside `theme.css`
 
+## Polish pass (varied from the mockups, ui-ux-pro-max "Modern Dark")
+
+The mockups were the starting point; these upgrades make it look more
+premium while keeping the same identity (navy/purple, red=enemy/cyan=ally):
+- Layered depth: a deep-navy base with a soft purple radial glow top-right
+  and faint teal glow bottom-left, instead of one flat background colour.
+- Cards have a hairline top highlight + shadow, and lift on hover
+  (`.card-interactive`: translateY -3px, stronger shadow).
+- Primary buttons use a purple gradient with a glow, and scale on press.
+- Rarity colour-coding on the Cookies roster (Common grey → Beast red,
+  etc.) via `--rarity-*` tokens — a real usability win over grey cards.
+- Skeleton shimmer placeholders while data loads (never a blank page).
+- Gradient logo text; active nav button has a glowing accent bar.
+- All effects are CSS-only (no JS/WebGL) so it stays fast mid-battle.
+
 ## Anti-patterns (do NOT do)
 
 - Light backgrounds anywhere (this is a dark-only theme, per mockups)
