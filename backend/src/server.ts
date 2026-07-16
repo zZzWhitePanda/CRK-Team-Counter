@@ -13,7 +13,8 @@ import dotenv from 'dotenv';
 
 import { cookiesRouter } from './routes/cookies';
 import { lookupRouter } from './routes/lookup';
-import { topTeamsRouter } from './routes/topTeams';
+import { authRouter } from './routes/auth';
+import { buildsRouter } from './routes/builds';
 
 dotenv.config();
 
@@ -27,7 +28,8 @@ app.use(express.json());  // turns JSON request bodies into req.body
 // ---- Routes ----
 app.use('/api/cookies', cookiesRouter);
 app.use('/api/lookup', lookupRouter);
-app.use('/api/top-teams', topTeamsRouter);
+app.use('/api/auth', authRouter);
+app.use('/api/builds', buildsRouter);
 
 // the 190 cookie portraits, served as normal static files:
 // GET /images/cookies/gingerbrave.png

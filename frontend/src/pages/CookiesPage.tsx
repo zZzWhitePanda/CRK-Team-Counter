@@ -6,13 +6,17 @@
 // endpoint the drop-downs use.
 // ============================================================
 
-import { useEffect, useState } from 'react';
-import { Search } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { Search, ArrowUpDown } from 'lucide-react';
 import { Cookie, getCookies, cookieImageUrl } from '../api';
 
 // pill options, matching the database CHECK rules
 const TYPES = ['Charge', 'Defense', 'Magic', 'Ambush', 'Support', 'Bomber', 'Ranged', 'Healing', 'BTS'];
 const RARITIES = ['Common', 'Rare', 'Special', 'Epic', 'Super Epic', 'Dragon', 'Legendary', 'Ancient', 'Beast', 'Witch'];
+
+// rarity order for sorting (index 0 = lowest). RARITIES is already
+// listed low -> high, so its index gives each rarity a rank.
+const RARITY_RANK: Record<string, number> = Object.fromEntries(RARITIES.map((r, i) => [r, i]));
 
 // each rarity gets its own accent colour (matches the CSS
 // variables in theme.css) so the roster is colour-coded at a
@@ -28,6 +32,7 @@ export function CookiesPage() {
     const [search, setSearch] = useState('');
     const [type, setType] = useState('');           // '' means All
     const [rarity, setRarity] = useState('');
+    const [sortBy, setSortBy] = useState<'rarity' | 'name' | 'type'>('rarity');
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(true);   // show skeletons while fetching
 
@@ -49,6 +54,20 @@ export function CookiesPage() {
         return () => clearTimeout(timer);
     }, [search, type, rarity]);
 
+    // sort the fetched cookies (client-side) by the chosen option
+    const sorted = useMemo(() => {
+        const list = [...cookies];
+        if (sortBy === 'name') {
+            list.sort((a, b) => a.name.localeCompare(b.name));
+        } else if (sortBy === 'type') {
+            list.sort((a, b) => a.type.localeCompare(b.type) || a.name.localeCompare(b.name));
+        } else {
+            // rarity: highest first (Beast -> Common), then name
+            list.sort((a, b) => (RARITY_RANK[b.rarity] - RARITY_RANK[a.rarity]) || a.name.localeCompare(b.name));
+        }
+        return list;
+    }, [cookies, sortBy]);
+
     return (
         <div>
             <h1 style={{ marginBottom: 8 }}>
@@ -58,24 +77,37 @@ export function CookiesPage() {
                 </span>
             </h1>
 
-            {/* search bar */}
-            <div style={{ position: 'relative', margin: '16px 0' }}>
-                <Search
-                    size={18}
-                    aria-hidden="true"
-                    style={{ position: 'absolute', left: 16, top: 14, color: 'var(--color-text-muted)' }}
-                />
-                <label htmlFor="roster-search" style={{ position: 'absolute', left: -9999 }}>
-                    Search roster
-                </label>
-                <input
-                    id="roster-search"
-                    className="input"
-                    style={{ paddingLeft: 44 }}
-                    placeholder="Search Roster..."
-                    value={search}
-                    onChange={e => setSearch(e.target.value)}
-                />
+            {/* search bar + sort dropdown */}
+            <div style={{ display: 'flex', gap: 12, margin: '16px 0', flexWrap: 'wrap' }}>
+                <div style={{ position: 'relative', flex: 1, minWidth: 220 }}>
+                    <Search
+                        size={18}
+                        aria-hidden="true"
+                        style={{ position: 'absolute', left: 16, top: 14, color: 'var(--color-text-muted)' }}
+                    />
+                    <label htmlFor="roster-search" style={{ position: 'absolute', left: -9999 }}>
+                        Search roster
+                    </label>
+                    <input
+                        id="roster-search"
+                        className="input"
+                        style={{ paddingLeft: 44 }}
+                        placeholder="Search by name…"
+                        value={search}
+                        onChange={e => setSearch(e.target.value)}
+                    />
+                </div>
+                <div style={{ position: 'relative', minWidth: 190 }}>
+                    <ArrowUpDown size={16} aria-hidden="true"
+                        style={{ position: 'absolute', left: 14, top: 15, color: 'var(--color-text-muted)' }} />
+                    <label htmlFor="roster-sort" style={{ position: 'absolute', left: -9999 }}>Sort cookies</label>
+                    <select id="roster-sort" className="input" style={{ paddingLeft: 40 }}
+                        value={sortBy} onChange={e => setSortBy(e.target.value as typeof sortBy)}>
+                        <option value="rarity">Sort: Rarity (high → low)</option>
+                        <option value="name">Sort: Name (A → Z)</option>
+                        <option value="type">Sort: Type</option>
+                    </select>
+                </div>
             </div>
 
             {/* type pills */}
@@ -131,7 +163,7 @@ export function CookiesPage() {
                     <div key={i} className="skeleton" style={{ height: 200 }} />
                 ))}
 
-                {!loading && cookies.map(cookie => {
+                {!loading && sorted.map(cookie => {
                     const accent = rarityColor(cookie.rarity);
                     return (
                         <div

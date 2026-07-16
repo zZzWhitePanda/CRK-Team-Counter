@@ -4,10 +4,17 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { App } from './App';
+import { AuthProvider } from './auth';
+import { applyAccent, getSavedAccent } from './accent';
 import './theme.css';
+
+// apply the user's saved accent colour before the app paints
+applyAccent(getSavedAccent());
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
     <React.StrictMode>
-        <App />
+        <AuthProvider>
+            <App />
+        </AuthProvider>
     </React.StrictMode>
 );
