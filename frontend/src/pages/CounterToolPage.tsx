@@ -9,10 +9,12 @@
 // ============================================================
 
 import { useEffect, useState } from 'react';
-import { Target, Heart, Swords } from 'lucide-react';
+import { Target, Heart, Swords, Shield, Settings2 } from 'lucide-react';
 import { Cookie, getCookies, lookupCounters, LookupResult, GearSetup } from '../api';
 import { TeamRow } from '../components/TeamRow';
 import { CookiePicker } from '../components/CookiePicker';
+import { CookieBuildEditor } from '../components/CookieBuildEditor';
+import { CookieBuild, emptyBuild } from '../gear';
 
 // gear/topping options for the optional gear drop-downs
 const GEAR_OPTIONS = [
@@ -30,6 +32,25 @@ export function CounterToolPage() {
     const [results, setResults] = useState<LookupResult | null>(null);
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
+
+    // ---- YOUR team (with full build customisation) ----
+    // Unlike the enemy, you know your own toppings/beascuit/etc, so
+    // each of your cookies gets a full build. Kept in slot order.
+    const [yourTeam, setYourTeam] = useState<string[]>(['', '', '', '', '']);
+    const [yourBuilds, setYourBuilds] = useState<CookieBuild[]>(
+        () => Array.from({ length: 5 }, emptyBuild));
+    const [editingSlot, setEditingSlot] = useState<number | null>(null);
+
+    function setYourSlot(index: number, name: string) {
+        setYourTeam(prev => prev.map((n, i) => i === index ? name : n));
+        // clearing a slot also clears its build
+        if (name === '') {
+            setYourBuilds(prev => prev.map((b, i) => i === index ? emptyBuild() : b));
+        }
+    }
+    function setYourBuild(index: number, build: CookieBuild) {
+        setYourBuilds(prev => prev.map((b, i) => i === index ? build : b));
+    }
 
     // load the roster once to fill the picker
     useEffect(() => {
@@ -128,6 +149,50 @@ export function CounterToolPage() {
                     {loading ? 'Searching…' : 'Find Counters'}
                 </button>
             </div>
+
+            {/* ---- YOUR team, with build customisation ---- */}
+            <div className="card" style={{ marginBottom: 24 }}>
+                <h2 className="section-title" style={{ fontSize: 18 }}>
+                    <Shield size={20} color="var(--color-ally)" aria-hidden="true" />
+                    YOUR TEAM
+                </h2>
+                <p className="muted" style={{ fontSize: 14, marginTop: -8, marginBottom: 16 }}>
+                    Pick your cookies and set each one's toppings, beascuit, ascension and level.
+                </p>
+
+                <div className="picker-row">
+                    {yourTeam.map((name, i) => {
+                        const cookie = roster.find(c => c.name === name);
+                        return (
+                            <div key={i} className="picker-cell">
+                                <CookiePicker
+                                    roster={roster}
+                                    selectedName={name}
+                                    disabledNames={yourTeam.filter(n => n)}
+                                    onPick={n => setYourSlot(i, n)}
+                                    onClear={() => setYourSlot(i, '')}
+                                />
+                                {/* once a cookie is picked, a Build button opens its editor */}
+                                {cookie && (
+                                    <button className="pill build-button" onClick={() => setEditingSlot(i)}>
+                                        <Settings2 size={14} aria-hidden="true" /> Build
+                                    </button>
+                                )}
+                            </div>
+                        );
+                    })}
+                </div>
+            </div>
+
+            {/* the build editor popup for the chosen your-team cookie */}
+            {editingSlot !== null && roster.find(c => c.name === yourTeam[editingSlot]) && (
+                <CookieBuildEditor
+                    cookie={roster.find(c => c.name === yourTeam[editingSlot])!}
+                    build={yourBuilds[editingSlot]}
+                    onChange={b => setYourBuild(editingSlot, b)}
+                    onClose={() => setEditingSlot(null)}
+                />
+            )}
 
             {/* ---- loading skeletons ---- */}
             {loading && (

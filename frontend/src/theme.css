@@ -59,7 +59,8 @@
     /* ---- shape, motion, type ---- */
     --radius: 14px;
     --radius-small: 10px;
-    --ease: cubic-bezier(0.16, 1, 0.3, 1);   /* smooth "expo out" */
+    --ease: cubic-bezier(0.16, 1, 0.3, 1);          /* smooth "expo out" */
+    --ease-bounce: cubic-bezier(0.34, 1.56, 0.64, 1); /* springy overshoot (game feel) */
 
     --font-heading: 'Russo One', sans-serif;
     --font-body: 'Chakra Petch', sans-serif;
@@ -69,12 +70,15 @@
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
 body {
-    /* layered background: a soft purple glow up top fading into
-       the deep navy, instead of one flat colour. Fixed so it
-       doesn't scroll. */
+    /* Layered "aurora" background: several soft coloured glows over
+       a deep navy base, plus a vignette that darkens the corners so
+       the content sits in a pool of light. This replaces the flat
+       purple gradient with real depth. Fixed so it doesn't scroll. */
     background:
-        radial-gradient(1200px 600px at 70% -10%, rgba(139, 124, 246, 0.18), transparent 60%),
-        radial-gradient(900px 500px at 0% 100%, rgba(45, 212, 191, 0.08), transparent 55%),
+        radial-gradient(1100px 620px at 72% -12%, rgba(139, 124, 246, 0.28), transparent 58%),
+        radial-gradient(820px 520px at 8% 4%, rgba(91, 111, 216, 0.20), transparent 55%),
+        radial-gradient(900px 560px at 100% 100%, rgba(45, 212, 191, 0.10), transparent 55%),
+        radial-gradient(1200px 900px at 50% 40%, rgba(20, 22, 43, 0), rgba(9, 10, 22, 0.55) 100%),
         var(--color-bg-deep);
     background-attachment: fixed;
     color: var(--color-text-body);
@@ -82,6 +86,18 @@ body {
     font-size: 16px;
     line-height: 1.5;
     -webkit-font-smoothing: antialiased;
+}
+
+/* A faint film grain over everything so flat areas aren't dead-flat.
+   The texture is an inline SVG (no network request) at low opacity. */
+body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    opacity: 0.04;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
 }
 
 h1, h2, h3 {
@@ -193,12 +209,13 @@ h3 { font-size: 18px; }
     text-decoration: none;
     cursor: pointer;
     position: relative;
-    transition: background 250ms var(--ease), color 250ms var(--ease), transform 150ms var(--ease);
+    transition: background 250ms var(--ease), color 250ms var(--ease), transform 200ms var(--ease-bounce);
 }
 .nav-button:hover {
     background: rgba(255, 255, 255, 0.05);
     color: var(--color-text);
 }
+.nav-button:active { transform: scale(0.96); }
 .nav-button.active {
     background: linear-gradient(135deg, rgba(139, 124, 246, 0.22), rgba(91, 111, 216, 0.14));
     color: var(--color-text);
@@ -293,8 +310,10 @@ h3 { font-size: 18px; }
     transition: background 200ms var(--ease), color 200ms var(--ease),
                 border-color 200ms var(--ease), transform 120ms var(--ease);
 }
-.pill:hover { color: var(--color-text); border-color: var(--color-border-strong); }
-.pill:active { transform: scale(0.96); }
+.pill { transition: background 200ms var(--ease), color 200ms var(--ease),
+                    border-color 200ms var(--ease), transform 200ms var(--ease-bounce); }
+.pill:hover { color: var(--color-text); border-color: var(--color-border-strong); transform: translateY(-1px); }
+.pill:active { transform: scale(0.94); }
 .pill.active {
     background: var(--gradient-primary);
     color: var(--color-text);
@@ -304,6 +323,8 @@ h3 { font-size: 18px; }
 
 /* ---- buttons ---- */
 .btn-primary {
+    position: relative;
+    overflow: hidden;
     padding: 13px 26px;
     min-height: 46px;
     border: none;
@@ -314,11 +335,18 @@ h3 { font-size: 18px; }
     font-size: 15px;
     letter-spacing: 0.5px;
     cursor: pointer;
-    box-shadow: var(--glow-primary);
-    transition: filter 200ms var(--ease), transform 120ms var(--ease), box-shadow 200ms var(--ease);
+    box-shadow: var(--glow-primary), inset 0 1px 0 rgba(255,255,255,0.25);
+    transition: filter 200ms var(--ease), transform 200ms var(--ease-bounce), box-shadow 200ms var(--ease);
 }
-.btn-primary:hover { filter: brightness(1.1); box-shadow: 0 0 32px rgba(139, 124, 246, 0.6); }
-.btn-primary:active { transform: scale(0.97); }
+/* glossy sheen across the top half, like a game button */
+.btn-primary::before {
+    content: '';
+    position: absolute; inset: 0 0 50% 0;
+    background: linear-gradient(180deg, rgba(255,255,255,0.28), transparent);
+    pointer-events: none;
+}
+.btn-primary:hover { filter: brightness(1.08); transform: translateY(-2px); box-shadow: 0 8px 24px rgba(139, 124, 246, 0.5), inset 0 1px 0 rgba(255,255,255,0.3); }
+.btn-primary:active { transform: scale(0.96) translateY(0); }
 .btn-primary:disabled {
     opacity: 0.5;
     cursor: not-allowed;
@@ -473,9 +501,10 @@ h3 { font-size: 18px; }
     border-top-width: 2px;
     border-radius: var(--radius-small);
     cursor: pointer; color: var(--color-text-body);
-    transition: transform 150ms var(--ease), background 150ms var(--ease);
+    transition: transform 200ms var(--ease-bounce), background 150ms var(--ease), border-color 150ms var(--ease);
 }
-.picker-option:hover:not(:disabled) { transform: translateY(-2px); background: var(--color-card-hover); }
+.picker-option:hover:not(:disabled) { transform: translateY(-3px) scale(1.02); background: var(--color-card-hover); }
+.picker-option:active:not(:disabled) { transform: scale(0.95); }
 .picker-option:disabled { cursor: not-allowed; }
 .picker-option img { object-fit: contain; filter: drop-shadow(0 3px 5px rgba(0,0,0,0.35)); }
 .picker-option-name { font-size: 11px; font-weight: 600; text-align: center; line-height: 1.2; color: var(--color-text); }
@@ -563,10 +592,87 @@ h3 { font-size: 18px; }
 }
 .swatch:hover { transform: scale(1.08); }
 
+/* ---- cookie build customisation ---- */
+.build-button {
+    display: flex; align-items: center; gap: 6px;
+    justify-content: center; width: 130px;
+    background: linear-gradient(135deg, rgba(34,211,238,0.16), rgba(34,211,238,0.06));
+    border: 1px solid rgba(34,211,238,0.4);
+    color: var(--color-ally);
+}
+.build-button:hover { border-color: var(--color-ally); color: var(--color-text); }
+
+.build-editor { max-width: 560px; max-height: 88vh; overflow-y: auto; }
+.build-row { display: flex; gap: 24px; align-items: flex-start; flex-wrap: wrap; }
+
+/* ascension star buttons */
+.ascension-row { display: flex; gap: 6px; flex-wrap: wrap; }
+.ascension-btn {
+    min-height: 40px; padding: 6px 10px;
+    background: var(--color-input); border: 1px solid var(--color-border);
+    border-radius: var(--radius-small); cursor: pointer; color: var(--color-text-body);
+    display: flex; align-items: center;
+    transition: transform 120ms var(--ease-bounce), border-color 150ms var(--ease);
+}
+.ascension-btn:hover { border-color: var(--color-border-strong); }
+.ascension-btn:active { transform: scale(0.92); }
+.ascension-btn.active { border-color: var(--color-primary); box-shadow: 0 0 0 2px rgba(139,124,246,0.3); background: var(--color-card-hover); }
+
+/* the in-game topping circle */
+.topping-circle {
+    position: relative;
+    margin: 8px auto;
+}
+.topping-circle-center {
+    position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+    width: 140px; height: 140px; border-radius: 50%;
+    background: radial-gradient(circle at 50% 35%, rgba(139,124,246,0.22), rgba(18,21,43,0.6) 70%);
+    border: 1px solid var(--color-border);
+    display: flex; align-items: center; justify-content: center;
+}
+.topping-circle-center img { object-fit: contain; filter: drop-shadow(0 4px 10px rgba(0,0,0,0.5)); }
+
+.topping-slot-ring {
+    position: absolute;
+    border-radius: 50%;
+    border: 2px dashed var(--color-border-strong);
+    background: rgba(18,21,43,0.85);
+    color: var(--color-text-muted);
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+    transition: transform 160ms var(--ease-bounce), border-color 160ms var(--ease), background 160ms var(--ease);
+}
+.topping-slot-ring:hover { transform: scale(1.12); border-color: var(--color-primary); color: var(--color-text); }
+.topping-slot-ring:active { transform: scale(0.95); }
+.topping-slot-ring.filled { border-style: solid; border-color: var(--color-primary); background: var(--color-card); }
+.topping-slot-ring img { object-fit: contain; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.4)); }
+
+/* beascuit selector */
+.beascuit-current {
+    display: flex; align-items: center; gap: 12px;
+    background: var(--color-input); border: 1px solid var(--color-border);
+    border-radius: var(--radius-small); padding: 12px;
+}
+.beascuit-current img, .beascuit-row img { object-fit: contain; }
+.beascuit-stats {
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-top: 12px;
+}
+.beascuit-row {
+    display: flex; align-items: center; gap: 12px;
+    background: var(--color-input); border: 1px solid var(--color-border);
+    border-top-width: 2px;
+    border-radius: var(--radius-small); padding: 8px 12px; cursor: pointer;
+    transition: transform 140ms var(--ease-bounce), background 140ms var(--ease), border-color 140ms var(--ease);
+}
+.beascuit-row:hover { transform: translateX(3px); background: var(--color-card-hover); border-color: var(--color-primary); }
+
 /* ---- mobile tweaks ---- */
 @media (max-width: 767px) {
     .topbar { padding: 12px 16px; }
     .content { padding: 20px 16px 32px; }
     .picker-cell, .picker-slot { width: 100px; }
     .picker-slot { height: 100px; }
+    .build-button { width: 100px; }
+    .beascuit-stats { grid-template-columns: repeat(2, 1fr); }
 }

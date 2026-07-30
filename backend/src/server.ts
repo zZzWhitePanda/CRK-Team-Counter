@@ -31,10 +31,17 @@ app.use('/api/lookup', lookupRouter);
 app.use('/api/auth', authRouter);
 app.use('/api/builds', buildsRouter);
 
-// the 190 cookie portraits, served as normal static files:
-// GET /images/cookies/gingerbrave.png
-app.use('/images/cookies',
-    express.static(path.join(__dirname, '..', '..', 'assets', 'cookie-images')));
+// the game art, served as normal static files:
+//   GET /images/cookies/gingerbrave.png        (190 cookie portraits)
+//   GET /images/toppings/raspberry.png         (toppings + tart-*.png)
+//   GET /images/beascuits/magic.png            (8 beascuit types)
+//   GET /images/ascension/star-3.png           (ascension stars 1-5)
+const assets = (folder: string) =>
+    express.static(path.join(__dirname, '..', '..', 'assets', folder));
+app.use('/images/cookies', assets('cookie-images'));
+app.use('/images/toppings', assets('topping-images'));
+app.use('/images/beascuits', assets('beascuit-images'));
+app.use('/images/ascension', assets('ascension-images'));
 
 // quick way to check the server is alive (and that the DB name
 // loaded from .env) - handy when deploying to Railway later
