@@ -5,11 +5,18 @@
 // ============================================================
 
 import { useEffect, useState } from 'react';
-import { Trophy, Plus, Heart } from 'lucide-react';
+import { Trophy, Plus, Heart, Settings2, Gem } from 'lucide-react';
 import { Cookie, PlayerBuild, getCookies, getTopBuilds, likeBuild, submitBuild } from '../api';
 import { TeamRow } from '../components/TeamRow';
 import { CookiePicker } from '../components/CookiePicker';
+import { CookieBuildEditor } from '../components/CookieBuildEditor';
+import { EnemyCookieEditor } from '../components/EnemyCookieEditor';
+import { TreasureSelector } from '../components/TreasureSelector';
 import { AuthModal } from '../components/AuthModal';
+import {
+    CookieBuild, emptyBuild, EnemyInfo, emptyEnemyInfo,
+    TeamTreasures, emptyTreasures,
+} from '../gear';
 import { useAuth } from '../auth';
 
 export function CommunityBuildsPage() {
@@ -120,16 +127,28 @@ export function CommunityBuildsPage() {
 }
 
 // ---- the submit-a-build form (its own component to keep state tidy) ----
+// This is where a full build is made: your counter team gets the full
+// customisation (toppings, tart, beascuit, ascension, level), the enemy
+// team gets what you can see (level + ascension), and each team has its
+// 3 treasures.
 function SubmitForm({ roster, onSubmitted }: { roster: Cookie[]; onSubmitted: (b: PlayerBuild) => void }) {
+    // enemy side: cookie names + what you can see of each + treasures
     const [opponent, setOpponent] = useState<string[]>(['', '', '', '', '']);
+    const [opponentInfo, setOpponentInfo] = useState<EnemyInfo[]>(() => Array.from({ length: 5 }, emptyEnemyInfo));
+    const [enemyTreasures, setEnemyTreasures] = useState<TeamTreasures>(emptyTreasures);
+
+    // your side: cookie names + full builds + treasures
     const [counter, setCounter] = useState<string[]>(['', '', '', '', '']);
+    const [counterBuilds, setCounterBuilds] = useState<CookieBuild[]>(() => Array.from({ length: 5 }, emptyBuild));
+    const [yourTreasures, setYourTreasures] = useState<TeamTreasures>(emptyTreasures);
+
     const [note, setNote] = useState('');
     const [error, setError] = useState('');
     const [busy, setBusy] = useState(false);
 
-    const setSlot = (setter: typeof setOpponent, arr: string[], i: number, v: string) => {
-        const next = [...arr]; next[i] = v; setter(next);
-    };
+    // which editor popup is open, if any
+    const [editEnemy, setEditEnemy] = useState<number | null>(null);
+    const [editMine, setEditMine] = useState<number | null>(null);
 
     async function handleSubmit() {
         const opp = opponent.filter(n => n);
@@ -137,9 +156,19 @@ function SubmitForm({ roster, onSubmitted }: { roster: Cookie[]; onSubmitted: (b
         if (opp.length === 0) { setError('Pick at least one enemy cookie.'); return; }
         if (cnt.length === 0) { setError('Pick at least one cookie for your counter team.'); return; }
 
+        // The full build details (toppings/beascuit/treasures/etc) are
+        // saved in the build's gearSetup field so nothing is lost.
+        // Only the cookies for slots that are actually filled are kept.
+        const details = {
+            enemyInfo: opponent.map((n, i) => n ? { cookie: n, ...opponentInfo[i] } : null).filter(Boolean),
+            enemyTreasures: enemyTreasures.filter(Boolean),
+            yourBuilds: counter.map((n, i) => n ? { cookie: n, ...counterBuilds[i] } : null).filter(Boolean),
+            yourTreasures: yourTreasures.filter(Boolean),
+        };
+
         setBusy(true); setError('');
         try {
-            const build = await submitBuild({ opponentTeam: opp, counterTeam: cnt, gearSetup: {}, note });
+            const build = await submitBuild({ opponentTeam: opp, counterTeam: cnt, gearSetup: details, note });
             onSubmitted(build);
         } catch (err) {
             setError(err instanceof Error ? err.message : 'Could not submit.');
@@ -152,27 +181,62 @@ function SubmitForm({ roster, onSubmitted }: { roster: Cookie[]; onSubmitted: (b
         <div className="card" style={{ marginBottom: 24, borderColor: 'var(--color-primary)' }}>
             <h2 style={{ fontSize: 18, marginBottom: 16 }}>Submit a counter build</h2>
 
+            {/* ---- enemy team (level + ascension only) ---- */}
             <p className="field-label" style={{ color: 'var(--color-enemy)' }}>Enemy team you're countering</p>
-            <div className="picker-row" style={{ marginBottom: 20 }}>
-                {opponent.map((name, i) => (
-                    <CookiePicker key={i} roster={roster} selectedName={name}
-                        disabledNames={opponent.filter(n => n)}
-                        onPick={n => setSlot(setOpponent, opponent, i, n)}
-                        onClear={() => setSlot(setOpponent, opponent, i, '')} />
-                ))}
+            <div className="picker-row" style={{ marginBottom: 12 }}>
+                {opponent.map((name, i) => {
+                    const cookie = roster.find(c => c.name === name);
+                    return (
+                        <div key={i} className="picker-cell">
+                            <CookiePicker roster={roster} selectedName={name}
+                                disabledNames={opponent.filter(n => n)}
+                                onPick={n => setOpponent(prev => prev.map((v, idx) => idx === i ? n : v))}
+                                onClear={() => setOpponent(prev => prev.map((v, idx) => idx === i ? '' : v))} />
+                            {cookie && (
+                                <button className="pill info-button" onClick={() => setEditEnemy(i)}>
+                                    <Settings2 size={14} aria-hidden="true" />
+                                    Lv.{opponentInfo[i].level}{opponentInfo[i].ascension > 0 ? ` · ${opponentInfo[i].ascension}A` : ''}
+                                </button>
+                            )}
+                        </div>
+                    );
+                })}
             </div>
+            <h4 className="section-title" style={{ fontSize: 13, margin: '0 0 6px' }}>
+                <Gem size={14} color="var(--color-enemy)" aria-hidden="true" /> Enemy treasures
+            </h4>
+            <TreasureSelector treasures={enemyTreasures} onChange={setEnemyTreasures} />
 
-            <p className="field-label" style={{ color: 'var(--color-ally)' }}>Your counter team</p>
-            <div className="picker-row" style={{ marginBottom: 20 }}>
-                {counter.map((name, i) => (
-                    <CookiePicker key={i} roster={roster} selectedName={name}
-                        disabledNames={counter.filter(n => n)}
-                        onPick={n => setSlot(setCounter, counter, i, n)}
-                        onClear={() => setSlot(setCounter, counter, i, '')} />
-                ))}
+            {/* ---- your counter team (full build) ---- */}
+            <p className="field-label" style={{ color: 'var(--color-ally)', marginTop: 24 }}>Your counter team</p>
+            <div className="picker-row" style={{ marginBottom: 12 }}>
+                {counter.map((name, i) => {
+                    const cookie = roster.find(c => c.name === name);
+                    return (
+                        <div key={i} className="picker-cell">
+                            <CookiePicker roster={roster} selectedName={name}
+                                disabledNames={counter.filter(n => n)}
+                                onPick={n => setCounter(prev => prev.map((v, idx) => idx === i ? n : v))}
+                                onClear={() => {
+                                    setCounter(prev => prev.map((v, idx) => idx === i ? '' : v));
+                                    setCounterBuilds(prev => prev.map((b, idx) => idx === i ? emptyBuild() : b));
+                                }} />
+                            {cookie && (
+                                <button className="pill build-button" onClick={() => setEditMine(i)}>
+                                    <Settings2 size={14} aria-hidden="true" /> Build
+                                </button>
+                            )}
+                        </div>
+                    );
+                })}
             </div>
+            <h4 className="section-title" style={{ fontSize: 13, margin: '0 0 6px' }}>
+                <Gem size={14} color="var(--color-ally)" aria-hidden="true" /> Your treasures
+            </h4>
+            <TreasureSelector treasures={yourTreasures} onChange={setYourTreasures} />
 
-            <label htmlFor="build-note" className="field-label">Note (how it works — optional, max 1000)</label>
+            {/* ---- note ---- */}
+            <label htmlFor="build-note" className="field-label" style={{ marginTop: 24 }}>Note (how it works — optional, max 1000)</label>
             <textarea
                 id="build-note"
                 className="input"
@@ -188,6 +252,22 @@ function SubmitForm({ roster, onSubmitted }: { roster: Cookie[]; onSubmitted: (b
             <button className="btn-primary" style={{ marginTop: 16 }} onClick={handleSubmit} disabled={busy}>
                 {busy ? 'Submitting…' : 'Post build'}
             </button>
+
+            {/* editor popups */}
+            {editEnemy !== null && roster.find(c => c.name === opponent[editEnemy]) && (
+                <EnemyCookieEditor
+                    cookie={roster.find(c => c.name === opponent[editEnemy])!}
+                    info={opponentInfo[editEnemy]}
+                    onChange={info => setOpponentInfo(prev => prev.map((v, idx) => idx === editEnemy ? info : v))}
+                    onClose={() => setEditEnemy(null)} />
+            )}
+            {editMine !== null && roster.find(c => c.name === counter[editMine]) && (
+                <CookieBuildEditor
+                    cookie={roster.find(c => c.name === counter[editMine])!}
+                    build={counterBuilds[editMine]}
+                    onChange={b => setCounterBuilds(prev => prev.map((v, idx) => idx === editMine ? b : v))}
+                    onClose={() => setEditMine(null)} />
+            )}
         </div>
     );
 }

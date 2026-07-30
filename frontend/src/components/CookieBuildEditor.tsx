@@ -7,11 +7,11 @@
 // ============================================================
 
 import { useState } from 'react';
-import { X, Star } from 'lucide-react';
+import { X, Star, Plus } from 'lucide-react';
 import { Cookie } from '../api';
 import {
-    CookieBuild, BEASCUITS, BEASCUIT_STATS, ASCENSION_LEVELS, SubStat,
-    beascuitImageUrl, ascensionImageUrl,
+    CookieBuild, BEASCUITS, BEASCUIT_STATS, ASCENSION_LEVELS, SubStat, TOPPINGS,
+    beascuitImageUrl, ascensionImageUrl, toppingImageUrl,
 } from '../gear';
 import { ToppingCircle } from './ToppingCircle';
 
@@ -68,6 +68,10 @@ export function CookieBuildEditor({ cookie, build, onChange, onClose }: Props) {
                         onChange={toppings => patch({ toppings })} />
                 </div>
 
+                {/* ---- Topping Tart (its own single slot) ---- */}
+                <h3 style={{ margin: '16px 0 8px' }}>Topping Tart</h3>
+                <TartSlot tart={build.tart} onChange={tart => patch({ tart })} />
+
                 {/* ---- Beascuit ---- */}
                 <h3 style={{ margin: '16px 0 8px' }}>Beascuit</h3>
                 <BeascuitSelector cookieType={cookie.type} build={build}
@@ -78,6 +82,52 @@ export function CookieBuildEditor({ cookie, build, onChange, onClose }: Props) {
                 </button>
             </div>
         </div>
+    );
+}
+
+// ---- the single Topping Tart slot ----
+// A cookie equips just ONE Topping Tart (separate from the 5 normal
+// toppings), and it only has a primary stat - no sub-stats to set.
+function TartSlot({ tart, onChange }: { tart: string | null; onChange: (t: string | null) => void }) {
+    const [picking, setPicking] = useState(false);
+    const current = TOPPINGS.find(t => t.key === tart);
+
+    return (
+        <>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <button className={'tart-slot' + (current ? ' filled' : '')} onClick={() => setPicking(true)}
+                    title={current ? current.name : 'Add a Topping Tart'}>
+                    {current
+                        ? <img src={toppingImageUrl(current.key, true)} alt={current.name} width={48} height={48} />
+                        : <Plus size={22} aria-hidden="true" />}
+                </button>
+                {current
+                    ? <div>
+                        <div style={{ color: 'var(--color-text)', fontWeight: 700 }}>{current.name} Tart</div>
+                        <button className="link-button" onClick={() => onChange(null)}>Remove</button>
+                      </div>
+                    : <span className="muted" style={{ fontSize: 14 }}>No Topping Tart equipped</span>}
+            </div>
+
+            {picking && (
+                <div className="modal-backdrop" onClick={() => setPicking(false)}>
+                    <div className="modal-card picker-modal" onClick={e => e.stopPropagation()}>
+                        <button className="modal-close" onClick={() => setPicking(false)} aria-label="Close"><X size={20} /></button>
+                        <h2 style={{ marginBottom: 12 }}>Choose a Topping Tart</h2>
+                        <div className="picker-grid">
+                            {TOPPINGS.map(t => (
+                                <button key={t.key} className="picker-option"
+                                    onClick={() => { onChange(t.key); setPicking(false); }} title={t.name}>
+                                    <img src={toppingImageUrl(t.key, true)} alt={t.name} width={52} height={52} />
+                                    <span className="picker-option-name">{t.name}</span>
+                                    <span className="muted" style={{ fontSize: 10, fontWeight: 700 }}>{t.primaryStat}</span>
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                </div>
+            )}
+        </>
     );
 }
 

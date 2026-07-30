@@ -100,9 +100,9 @@ function ToppingSlotEditor({ slot, onSave, onRemove, onClose }: {
     // 'pick' = choosing a topping, 'stats' = setting sub-stats
     const [step, setStep] = useState<'pick' | 'stats'>(slot ? 'stats' : 'pick');
 
-    function choose(key: string, tart: boolean) {
+    function choose(key: string) {
         setToppingKey(key);
-        setIsTart(tart);
+        setIsTart(false);   // the circle holds normal toppings; tarts are a separate slot
         setStep('stats');
     }
 
@@ -122,7 +122,15 @@ function ToppingSlotEditor({ slot, onSave, onRemove, onClose }: {
                 {step === 'pick' && (
                     <>
                         <h2 style={{ marginBottom: 12 }}>Choose a topping</h2>
-                        <ToppingGrid onPick={choose} />
+                        <div className="picker-grid">
+                            {TOPPINGS.map(t => (
+                                <button key={t.key} className="picker-option" onClick={() => choose(t.key)} title={t.name}>
+                                    <img src={toppingImageUrl(t.key, false)} alt={t.name} width={52} height={52} />
+                                    <span className="picker-option-name">{t.name}</span>
+                                    <span className="muted" style={{ fontSize: 10, fontWeight: 700 }}>{t.primaryStat}</span>
+                                </button>
+                            ))}
+                        </div>
                     </>
                 )}
 
@@ -180,25 +188,3 @@ function ToppingSlotEditor({ slot, onSave, onRemove, onClose }: {
     );
 }
 
-// ---- the grid of choosable toppings (normal + Topping Tarts) ----
-function ToppingGrid({ onPick }: { onPick: (key: string, isTart: boolean) => void }) {
-    const [tab, setTab] = useState<'topping' | 'tart'>('topping');
-    const isTart = tab === 'tart';
-    return (
-        <>
-            <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
-                <button className={'pill' + (tab === 'topping' ? ' active' : '')} onClick={() => setTab('topping')}>Toppings</button>
-                <button className={'pill' + (tab === 'tart' ? ' active' : '')} onClick={() => setTab('tart')}>Topping Tarts</button>
-            </div>
-            <div className="picker-grid">
-                {TOPPINGS.map(t => (
-                    <button key={t.key} className="picker-option" onClick={() => onPick(t.key, isTart)} title={t.name}>
-                        <img src={toppingImageUrl(t.key, isTart)} alt={t.name} width={52} height={52} />
-                        <span className="picker-option-name">{t.name}</span>
-                        <span className="muted" style={{ fontSize: 10, fontWeight: 700 }}>{t.primaryStat}</span>
-                    </button>
-                ))}
-            </div>
-        </>
-    );
-}

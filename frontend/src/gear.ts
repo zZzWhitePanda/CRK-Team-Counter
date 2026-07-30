@@ -72,6 +72,64 @@ export const BEASCUIT_STATS = ['ATK', 'HP', 'Bonus 1', 'Bonus 2'];
 // ascended. The star images are ascension/star-1.png .. star-5.png.
 export const ASCENSION_LEVELS = [0, 1, 2, 3, 4, 5];
 
+// ---- Treasures ------------------------------------------------
+// Treasures are equipped to the whole TEAM (3 slots), not per cookie.
+// All 45 are from https://cookierunkingdom.fandom.com/wiki/Treasure
+// `key` matches the image filename in assets/treasure-images/.
+export interface Treasure { key: string; name: string; }
+
+export const TREASURES: Treasure[] = [
+    { key: 'cheesebird-s-coin-purse', name: "Cheesebird's Coin Purse" },
+    { key: 'gatekeeper-ghost-s-horn', name: "Gatekeeper Ghost's Horn" },
+    { key: 'ginkgoblin-s-trophy-safe', name: "Ginkgoblin's Trophy Safe" },
+    { key: 'squishy-jelly-watch', name: 'Squishy Jelly Watch' },
+    { key: 'bear-jelly-s-lollipop', name: "Bear Jelly's Lollipop" },
+    { key: 'disciple-s-magic-scroll', name: "Disciple's Magic Scroll" },
+    { key: 'echo-of-the-hurricane-s-song', name: "Echo of the Hurricane's Song" },
+    { key: 'grim-looking-scythe', name: 'Grim-looking Scythe' },
+    { key: 'miraculous-ghost-ice-cream', name: 'Miraculous Ghost Ice Cream' },
+    { key: 'pilgrim-s-slingshot', name: "Pilgrim's Slingshot" },
+    { key: 'priestess-cookie-s-paper-charm', name: "Priestess Cookie's Paper Charm" },
+    { key: 'acorn-snowball-with-a-tiny-cookie', name: 'Acorn Snowball With a Tiny Cookie' },
+    { key: 'blossoming-acorn-bomb', name: 'Blossoming Acorn Bomb' },
+    { key: 'festive-acorn-gift-box', name: 'Festive Acorn Gift Box' },
+    { key: 'ice-cold-energy-drink', name: 'Ice-cold Energy Drink' },
+    { key: 'blind-healer-s-staff', name: "Blind Healer's Staff" },
+    { key: 'bookseller-s-monocle', name: "Bookseller's Monocle" },
+    { key: 'cape-of-the-vanquisher', name: 'Cape of the Vanquisher' },
+    { key: 'cursed-catacombs-candle', name: 'Cursed Catacombs Candle' },
+    { key: 'divine-honey-cream-crown', name: 'Divine Honey Cream Crown' },
+    { key: 'dream-conductor-s-whistle', name: "Dream Conductor's Whistle" },
+    { key: 'durianeer-s-squeaky-flamingo-tube', name: "Durianeer's Squeaky Flamingo Tube" },
+    { key: 'elder-pilgrim-s-torch', name: "Elder Pilgrim's Torch" },
+    { key: 'explorer-s-monocle', name: "Explorer's Monocle" },
+    { key: 'great-sage-s-gem', name: "Great Sage's Gem" },
+    { key: 'grim-looking-electrifying-scythe', name: 'Grim-looking Electrifying Scythe' },
+    { key: 'hollyberrian-royal-necklace', name: 'Hollyberrian Royal Necklace' },
+    { key: 'insignia-of-the-indomitable-knights', name: 'Insignia of the Indomitable Knights' },
+    { key: 'jelly-worm-s-sticky-goo', name: "Jelly Worm's Sticky Goo" },
+    { key: 'librarian-s-enchanted-robes', name: "Librarian's Enchanted Robes" },
+    { key: 'milk-tribe-s-frozen-torch', name: "Milk Tribe's Frozen Torch" },
+    { key: 'miraculous-natural-remedy', name: 'Miraculous Natural Remedy' },
+    { key: 'mysterious-jewelry-box', name: 'Mysterious Jewelry Box' },
+    { key: 'mystical-silver-fork', name: 'Mystical Silver Fork' },
+    { key: 'old-pilgrim-s-scroll', name: "Old Pilgrim's Scroll" },
+    { key: 'sacred-pomegranate-branch', name: 'Sacred Pomegranate Branch' },
+    { key: 'seamstress-s-pin-cushion', name: "Seamstress's Pin Cushion" },
+    { key: 'sleepyhead-s-jelly-watch', name: "Sleepyhead's Jelly Watch" },
+    { key: 'subtle-fragrant-remedy', name: 'Subtle Fragrant Remedy' },
+    { key: 'sugar-swan-s-shining-feather', name: "Sugar Swan's Shining Feather" },
+    { key: 'the-order-s-sacred-fork', name: "The Order's Sacred Fork" },
+    { key: 'thunder-god-s-paper-charm', name: "Thunder God's Paper Charm" },
+    { key: 'twinkling-starlight-crown', name: 'Twinkling Starlight Crown' },
+    { key: 'unyielding-berry-necklace', name: 'Unyielding Berry Necklace' },
+    { key: 'vial-of-raging-dunes', name: 'Vial of Raging Dunes' },
+];
+
+// a team's treasures = 3 slots (each a treasure key, or null if empty)
+export type TeamTreasures = (string | null)[];
+export function emptyTreasures(): TeamTreasures { return [null, null, null]; }
+
 // ---- the build stored for one cookie --------------------------
 export interface SubStat { stat: string; value: number; }
 
@@ -83,8 +141,12 @@ export interface ToppingSlot {
 
 export interface BeascuitBuild { key: string; stats: SubStat[]; }
 
+// The FULL build for one of YOUR cookies (used when making a
+// community build). A cookie has 5 topping slots PLUS one separate
+// Topping Tart slot, a beascuit, ascension and level.
 export interface CookieBuild {
-    toppings: (ToppingSlot | null)[];  // exactly 5 slots
+    toppings: (ToppingSlot | null)[];  // exactly 5 slots (normal toppings)
+    tart: string | null;              // the single Topping Tart flavour (or none)
     beascuit: BeascuitBuild | null;
     ascension: number;                 // 0-5
     level: number;                     // 1-90 typically
@@ -92,8 +154,13 @@ export interface CookieBuild {
 
 // a fresh, empty build (5 empty topping slots, nothing else set)
 export function emptyBuild(): CookieBuild {
-    return { toppings: [null, null, null, null, null], beascuit: null, ascension: 0, level: 1 };
+    return { toppings: [null, null, null, null, null], tart: null, beascuit: null, ascension: 0, level: 1 };
 }
+
+// What you can see of an ENEMY cookie in-game: only their level and
+// ascension (you can't see their toppings, tart or beascuit).
+export interface EnemyInfo { ascension: number; level: number; }
+export function emptyEnemyInfo(): EnemyInfo { return { ascension: 0, level: 1 }; }
 
 // ---- image URL helpers ----------------------------------------
 export function toppingImageUrl(toppingKey: string, isTart: boolean) {
@@ -104,4 +171,7 @@ export function beascuitImageUrl(key: string) {
 }
 export function ascensionImageUrl(level: number) {
     return `${API_BASE}/images/ascension/star-${level}.png`;
+}
+export function treasureImageUrl(key: string) {
+    return `${API_BASE}/images/treasures/${key}.png`;
 }

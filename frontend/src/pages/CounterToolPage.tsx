@@ -1,56 +1,39 @@
 // ============================================================
 // CounterToolPage.tsx - the main feature (UC01).
 //
-// The user builds the enemy team using the visual CookiePicker
-// (up to 5 cookies, FR01), optionally sets the gear each one is
-// using (FR02), and hits Find Counters. Results come back in two
-// lists: meta teams by win rate, community builds by likes
-// (FR03/FR04).
+// The user builds the ENEMY team here and hits Find Counters.
+// Because you can't see an opponent's toppings/beascuit in-game,
+// the enemy side only lets you set what you CAN see: each cookie's
+// level and ascension, plus the team's 3 treasures. Full build
+// customisation (toppings, tarts, beascuits) lives in the
+// Community Builds submit form, where you describe your own team.
+//
+// Results come back in two lists: meta teams by win rate, and
+// community builds by likes (FR03/FR04).
 // ============================================================
 
 import { useEffect, useState } from 'react';
-import { Target, Heart, Swords, Shield, Settings2 } from 'lucide-react';
-import { Cookie, getCookies, lookupCounters, LookupResult, GearSetup } from '../api';
+import { Target, Heart, Swords, Gem, Settings2 } from 'lucide-react';
+import { Cookie, getCookies, lookupCounters, LookupResult } from '../api';
 import { TeamRow } from '../components/TeamRow';
 import { CookiePicker } from '../components/CookiePicker';
-import { CookieBuildEditor } from '../components/CookieBuildEditor';
-import { CookieBuild, emptyBuild } from '../gear';
-
-// gear/topping options for the optional gear drop-downs
-const GEAR_OPTIONS = [
-    'Searing Raspberry', 'Swift Chocolate', 'Solid Almond', 'Juicy Apple Jelly',
-    'Bouncy Caramel', 'Healthy Peanut', 'Hard Walnut', 'Fresh Kiwi', 'Sweet Candy',
-];
+import { EnemyCookieEditor } from '../components/EnemyCookieEditor';
+import { TreasureSelector } from '../components/TreasureSelector';
+import { EnemyInfo, emptyEnemyInfo, TeamTreasures, emptyTreasures } from '../gear';
 
 export function CounterToolPage() {
     const [roster, setRoster] = useState<Cookie[]>([]);
 
-    // 5 slots; '' = empty slot. Gear matches by slot position.
+    // the enemy team: 5 cookie slots + what we can see of each cookie
     const [enemyTeam, setEnemyTeam] = useState<string[]>(['', '', '', '', '']);
-    const [enemyGear, setEnemyGear] = useState<string[]>(['', '', '', '', '']);
+    const [enemyInfo, setEnemyInfo] = useState<EnemyInfo[]>(
+        () => Array.from({ length: 5 }, emptyEnemyInfo));
+    const [enemyTreasures, setEnemyTreasures] = useState<TeamTreasures>(emptyTreasures);
+    const [editingEnemy, setEditingEnemy] = useState<number | null>(null);
 
     const [results, setResults] = useState<LookupResult | null>(null);
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
-
-    // ---- YOUR team (with full build customisation) ----
-    // Unlike the enemy, you know your own toppings/beascuit/etc, so
-    // each of your cookies gets a full build. Kept in slot order.
-    const [yourTeam, setYourTeam] = useState<string[]>(['', '', '', '', '']);
-    const [yourBuilds, setYourBuilds] = useState<CookieBuild[]>(
-        () => Array.from({ length: 5 }, emptyBuild));
-    const [editingSlot, setEditingSlot] = useState<number | null>(null);
-
-    function setYourSlot(index: number, name: string) {
-        setYourTeam(prev => prev.map((n, i) => i === index ? name : n));
-        // clearing a slot also clears its build
-        if (name === '') {
-            setYourBuilds(prev => prev.map((b, i) => i === index ? emptyBuild() : b));
-        }
-    }
-    function setYourBuild(index: number, build: CookieBuild) {
-        setYourBuilds(prev => prev.map((b, i) => i === index ? build : b));
-    }
 
     // load the roster once to fill the picker
     useEffect(() => {
@@ -58,35 +41,30 @@ export function CounterToolPage() {
     }, []);
 
     function setSlot(index: number, name: string) {
-        const next = [...enemyTeam];
-        next[index] = name;
-        setEnemyTeam(next);
+        setEnemyTeam(prev => prev.map((n, i) => i === index ? name : n));
+        if (name === '') {  // clearing a slot resets its info
+            setEnemyInfo(prev => prev.map((info, i) => i === index ? emptyEnemyInfo() : info));
+        }
     }
-    function setGearSlot(index: number, gear: string) {
-        const next = [...enemyGear];
-        next[index] = gear;
-        setEnemyGear(next);
+    function setInfo(index: number, info: EnemyInfo) {
+        setEnemyInfo(prev => prev.map((v, i) => i === index ? info : v));
     }
 
     async function runSearch() {
-        // FR09: client-side check first so an empty search never
-        // wastes a trip to the server (it checks again anyway)
+        // FR09: check on the browser side first so an empty search
+        // never wastes a trip to the server (it checks again anyway)
         const picked = enemyTeam.filter(name => name !== '');
         if (picked.length === 0) {
             setError('Please pick at least one enemy cookie.');
             return;
         }
-
-        // build { cookieName: gear } from the two slot arrays
-        const gear: GearSetup = {};
-        enemyTeam.forEach((name, i) => {
-            if (name !== '' && enemyGear[i] !== '') gear[name] = enemyGear[i];
-        });
-
         setLoading(true);
         setError('');
         try {
-            setResults(await lookupCounters(picked, gear));
+            // the lookup matches on the enemy team's cookies; the
+            // level/ascension/treasures are extra context the user
+            // records but don't change which teams counter this comp.
+            setResults(await lookupCounters(picked, {}));
         } catch (err) {
             setError(err instanceof Error ? err.message : 'Search failed.');
             setResults(null);
@@ -108,7 +86,7 @@ export function CounterToolPage() {
                 Drop in the opponent's roster, get counter teams that win the matchup.
             </p>
 
-            {/* ---- enemy team picker card ---- */}
+            {/* ---- enemy team card ---- */}
             <div className="card" style={{ marginBottom: 24 }}>
                 <h2 className="section-title" style={{ fontSize: 18 }}>
                     <Target size={20} color="var(--color-enemy)" aria-hidden="true" />
@@ -116,30 +94,34 @@ export function CounterToolPage() {
                 </h2>
 
                 <div className="picker-row">
-                    {enemyTeam.map((name, i) => (
-                        <div key={i} className="picker-cell">
-                            <CookiePicker
-                                roster={roster}
-                                selectedName={name}
-                                disabledNames={pickedNames}
-                                onPick={n => setSlot(i, n)}
-                                onClear={() => { setSlot(i, ''); setGearSlot(i, ''); }}
-                            />
-                            {/* gear only appears once a cookie is picked (FR02, optional) */}
-                            {name !== '' && (
-                                <select
-                                    className="input gear-select"
-                                    aria-label={`Gear for ${name}`}
-                                    value={enemyGear[i]}
-                                    onChange={e => setGearSlot(i, e.target.value)}
-                                >
-                                    <option value="">Gear? (optional)</option>
-                                    {GEAR_OPTIONS.map(g => <option key={g} value={g}>{g}</option>)}
-                                </select>
-                            )}
-                        </div>
-                    ))}
+                    {enemyTeam.map((name, i) => {
+                        const cookie = roster.find(c => c.name === name);
+                        return (
+                            <div key={i} className="picker-cell">
+                                <CookiePicker
+                                    roster={roster}
+                                    selectedName={name}
+                                    disabledNames={pickedNames}
+                                    onPick={n => setSlot(i, n)}
+                                    onClear={() => setSlot(i, '')}
+                                />
+                                {/* once picked, a small Info button for level + ascension */}
+                                {cookie && (
+                                    <button className="pill info-button" onClick={() => setEditingEnemy(i)}>
+                                        <Settings2 size={14} aria-hidden="true" />
+                                        Lv.{enemyInfo[i].level}{enemyInfo[i].ascension > 0 ? ` · ${enemyInfo[i].ascension}A` : ''}
+                                    </button>
+                                )}
+                            </div>
+                        );
+                    })}
                 </div>
+
+                {/* enemy team treasures (3 slots) */}
+                <h3 className="section-title" style={{ fontSize: 15, marginTop: 24 }}>
+                    <Gem size={16} color="var(--color-enemy)" aria-hidden="true" /> Treasures
+                </h3>
+                <TreasureSelector treasures={enemyTreasures} onChange={setEnemyTreasures} />
 
                 {error && <div className="error-box" role="alert" style={{ marginTop: 16 }}>{error}</div>}
 
@@ -150,47 +132,13 @@ export function CounterToolPage() {
                 </button>
             </div>
 
-            {/* ---- YOUR team, with build customisation ---- */}
-            <div className="card" style={{ marginBottom: 24 }}>
-                <h2 className="section-title" style={{ fontSize: 18 }}>
-                    <Shield size={20} color="var(--color-ally)" aria-hidden="true" />
-                    YOUR TEAM
-                </h2>
-                <p className="muted" style={{ fontSize: 14, marginTop: -8, marginBottom: 16 }}>
-                    Pick your cookies and set each one's toppings, beascuit, ascension and level.
-                </p>
-
-                <div className="picker-row">
-                    {yourTeam.map((name, i) => {
-                        const cookie = roster.find(c => c.name === name);
-                        return (
-                            <div key={i} className="picker-cell">
-                                <CookiePicker
-                                    roster={roster}
-                                    selectedName={name}
-                                    disabledNames={yourTeam.filter(n => n)}
-                                    onPick={n => setYourSlot(i, n)}
-                                    onClear={() => setYourSlot(i, '')}
-                                />
-                                {/* once a cookie is picked, a Build button opens its editor */}
-                                {cookie && (
-                                    <button className="pill build-button" onClick={() => setEditingSlot(i)}>
-                                        <Settings2 size={14} aria-hidden="true" /> Build
-                                    </button>
-                                )}
-                            </div>
-                        );
-                    })}
-                </div>
-            </div>
-
-            {/* the build editor popup for the chosen your-team cookie */}
-            {editingSlot !== null && roster.find(c => c.name === yourTeam[editingSlot]) && (
-                <CookieBuildEditor
-                    cookie={roster.find(c => c.name === yourTeam[editingSlot])!}
-                    build={yourBuilds[editingSlot]}
-                    onChange={b => setYourBuild(editingSlot, b)}
-                    onClose={() => setEditingSlot(null)}
+            {/* the enemy info popup (level + ascension only) */}
+            {editingEnemy !== null && roster.find(c => c.name === enemyTeam[editingEnemy]) && (
+                <EnemyCookieEditor
+                    cookie={roster.find(c => c.name === enemyTeam[editingEnemy])!}
+                    info={enemyInfo[editingEnemy]}
+                    onChange={info => setInfo(editingEnemy, info)}
+                    onClose={() => setEditingEnemy(null)}
                 />
             )}
 

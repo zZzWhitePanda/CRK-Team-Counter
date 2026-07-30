@@ -133,11 +133,14 @@ export function getTopBuilds() {
     return getJson<PlayerBuild[]>('/api/builds/top');
 }
 
-// POST /api/builds - submit a build (login required, FR05)
+// POST /api/builds - submit a build (login required, FR05).
+// gearSetup carries the full build details (toppings, beascuits,
+// treasures, enemy info…) as JSON; the backend stores it as JSONB,
+// so it can be any shape - hence `unknown` rather than GearSetup.
 export function submitBuild(build: {
     opponentTeam: string[];
     counterTeam: string[];
-    gearSetup: GearSetup;
+    gearSetup: unknown;
     note: string;
 }) {
     return postJson<PlayerBuild>('/api/builds', build);

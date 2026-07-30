@@ -42,6 +42,7 @@ app.use('/images/cookies', assets('cookie-images'));
 app.use('/images/toppings', assets('topping-images'));
 app.use('/images/beascuits', assets('beascuit-images'));
 app.use('/images/ascension', assets('ascension-images'));
+app.use('/images/treasures', assets('treasure-images'));
 
 // quick way to check the server is alive (and that the DB name
 // loaded from .env) - handy when deploying to Railway later
