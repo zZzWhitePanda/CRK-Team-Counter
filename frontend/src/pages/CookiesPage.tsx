@@ -16,7 +16,8 @@ const RARITIES = ['Common', 'Rare', 'Special', 'Epic', 'Super Epic', 'Dragon', '
 
 // rarity order for sorting (index 0 = lowest). RARITIES is already
 // listed low -> high, so its index gives each rarity a rank.
-const RARITY_RANK: Record<string, number> = Object.fromEntries(RARITIES.map((r, i) => [r, i]));
+// Exported so the CookiePicker can sort by rarity the same way.
+export const RARITY_RANK: Record<string, number> = Object.fromEntries(RARITIES.map((r, i) => [r, i]));
 
 // each rarity gets its own accent colour (matches the CSS
 // variables in theme.css) so the roster is colour-coded at a

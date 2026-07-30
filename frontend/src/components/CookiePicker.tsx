@@ -9,9 +9,9 @@
 // ============================================================
 
 import { useState, useMemo } from 'react';
-import { X, Search, Plus } from 'lucide-react';
+import { X, Search, Plus, ArrowDownAZ, ArrowUp, ArrowDown } from 'lucide-react';
 import { Cookie, cookieImageUrl } from '../api';
-import { rarityColor } from '../pages/CookiesPage';
+import { rarityColor, RARITY_RANK } from '../pages/CookiesPage';
 
 interface CookiePickerProps {
     roster: Cookie[];
@@ -25,15 +25,30 @@ export function CookiePicker({ roster, selectedName, disabledNames, onPick, onCl
     const [open, setOpen] = useState(false);
     const [search, setSearch] = useState('');
 
+    // how the picker list is ordered.
+    // Default = rarity, ascending (Common -> highest rarity).
+    const [sortField, setSortField] = useState<'rarity' | 'name'>('rarity');
+    const [ascending, setAscending] = useState(true);
+
     const selected = roster.find(c => c.name === selectedName);
 
-    // filter the roster by the search text (name OR type)
+    // filter by the search text (name OR type), then sort by the
+    // chosen field and direction.
     const filtered = useMemo(() => {
         const q = search.trim().toLowerCase();
-        if (!q) return roster;
-        return roster.filter(c =>
-            c.name.toLowerCase().includes(q) || c.type.toLowerCase().includes(q));
-    }, [roster, search]);
+        const list = q
+            ? roster.filter(c => c.name.toLowerCase().includes(q) || c.type.toLowerCase().includes(q))
+            : [...roster];
+
+        list.sort((a, b) => {
+            const cmp = sortField === 'name'
+                ? a.name.localeCompare(b.name)                       // A -> Z
+                : (RARITY_RANK[a.rarity] - RARITY_RANK[b.rarity])    // Common -> highest
+                    || a.name.localeCompare(b.name);                 // tie-break by name
+            return ascending ? cmp : -cmp;   // flip for descending
+        });
+        return list;
+    }, [roster, search, sortField, ascending]);
 
     return (
         <>
@@ -64,7 +79,7 @@ export function CookiePicker({ roster, selectedName, disabledNames, onPick, onCl
                         </button>
                         <h2 style={{ marginBottom: 12 }}>Choose a cookie</h2>
 
-                        <div style={{ position: 'relative', marginBottom: 16 }}>
+                        <div style={{ position: 'relative', marginBottom: 12 }}>
                             <Search size={18} aria-hidden="true"
                                 style={{ position: 'absolute', left: 14, top: 14, color: 'var(--color-text-muted)' }} />
                             <input
@@ -75,6 +90,37 @@ export function CookiePicker({ roster, selectedName, disabledNames, onPick, onCl
                                 onChange={e => setSearch(e.target.value)}
                                 autoFocus
                             />
+                        </div>
+
+                        {/* sort controls: field (Rarity / A-Z) + direction toggle */}
+                        <div style={{ display: 'flex', gap: 8, marginBottom: 16, alignItems: 'center' }}>
+                            <span className="muted" style={{ fontSize: 13 }}>Sort by</span>
+                            <button
+                                className={'pill' + (sortField === 'rarity' ? ' active' : '')}
+                                onClick={() => setSortField('rarity')}
+                            >
+                                Rarity
+                            </button>
+                            <button
+                                className={'pill' + (sortField === 'name' ? ' active' : '')}
+                                onClick={() => setSortField('name')}
+                                style={{ display: 'flex', alignItems: 'center', gap: 4 }}
+                            >
+                                <ArrowDownAZ size={15} aria-hidden="true" /> A–Z
+                            </button>
+                            {/* direction toggle: flips up<->down each click */}
+                            <button
+                                className="pill"
+                                onClick={() => setAscending(v => !v)}
+                                title={ascending ? 'Ascending (low to high)' : 'Descending (high to low)'}
+                                aria-label={ascending ? 'Sorting ascending, click for descending' : 'Sorting descending, click for ascending'}
+                                style={{ display: 'flex', alignItems: 'center', gap: 4, marginLeft: 'auto' }}
+                            >
+                                {ascending ? <ArrowUp size={15} aria-hidden="true" /> : <ArrowDown size={15} aria-hidden="true" />}
+                                {sortField === 'name'
+                                    ? (ascending ? 'A → Z' : 'Z → A')
+                                    : (ascending ? 'Common → Top' : 'Top → Common')}
+                            </button>
                         </div>
 
                         <div className="picker-grid">
