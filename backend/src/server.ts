@@ -15,6 +15,7 @@ import { cookiesRouter } from './routes/cookies';
 import { lookupRouter } from './routes/lookup';
 import { authRouter } from './routes/auth';
 import { buildsRouter } from './routes/builds';
+import { usersRouter } from './routes/users';
 
 dotenv.config();
 
@@ -30,6 +31,7 @@ app.use('/api/cookies', cookiesRouter);
 app.use('/api/lookup', lookupRouter);
 app.use('/api/auth', authRouter);
 app.use('/api/builds', buildsRouter);
+app.use('/api/users', usersRouter);
 
 // the game art, served as normal static files:
 //   GET /images/cookies/gingerbrave.png        (190 cookie portraits)

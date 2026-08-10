@@ -1,16 +1,10 @@
 // ============================================================
 // CRK Team Builder - Cookie Seed Generator
-// Flynn Zipsin - VCE Software Development SAT
 //
 // Reads cookie_data.json (the roster scraped from the CRK wiki,
 // https://cookierunkingdom.fandom.com/wiki/List_of_Cookies) and
 // writes cookies_seed.sql, the INSERT statements that fill the
 // cookies table.
-//
-// Why a script instead of typing the SQL by hand?
-// - 190 cookies is way too many to type without mistakes
-// - when the game adds new cookies, I just update the JSON and
-//   re-run this (maintainability, NFR09)
 //
 // Run with:  node generate_cookie_seed.js
 // ============================================================

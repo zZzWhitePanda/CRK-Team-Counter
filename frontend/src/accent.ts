@@ -1,9 +1,8 @@
 // ============================================================
-// accent.ts - the accent-colour setting (a REAL, working setting).
-//
+// accent.ts - the accent-colour setting
 // The user can pick an accent colour in Settings. The choice is
 // saved in the browser (localStorage) and applied by overriding
-// the --color-primary CSS variables on the page root, so it
+// the color-primary CSS variables on the page root, so it
 // changes the whole site and sticks after a refresh.
 // ============================================================
 

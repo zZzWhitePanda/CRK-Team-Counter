@@ -32,6 +32,11 @@ CREATE TABLE users (
     email         VARCHAR(255) UNIQUE NOT NULL, -- used to log in
     password_hash VARCHAR(255) NOT NULL,        -- hashed password, never plain text
     is_admin      BOOLEAN DEFAULT FALSE,        -- TRUE = can edit meta_teams
+    -- profile picture: the filename of a COOKIE portrait (e.g.
+    -- 'shadow-milk-cookie.png'). Using a cookie as the avatar fits
+    -- the game and needs no file uploads - important because the
+    -- free hosting wipes uploaded files when the server restarts.
+    avatar        VARCHAR(100),
     created_at    TIMESTAMP DEFAULT NOW()
 );
 
@@ -127,6 +132,9 @@ CREATE TABLE user_builds (
     gear_setup    JSONB,                   -- cookie name -> gear type
     note          VARCHAR(1000),           -- 'how this team works' (max 1000 chars, FR05)
     likes         INTEGER DEFAULT 0,       -- kept up to date by the backend (FR07)
+    -- TRUE = anyone can see this build, FALSE = only its owner.
+    -- The owner can flip this from their profile page.
+    is_public     BOOLEAN DEFAULT TRUE,
     created_at    TIMESTAMP DEFAULT NOW(),
 
     CONSTRAINT opponent_team_size CHECK

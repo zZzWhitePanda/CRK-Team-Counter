@@ -33,10 +33,11 @@ async function markLiked(builds: { build_id: number; likedByMe?: boolean }[], us
 buildsRouter.get('/top', optionalAuth, async (req: Request, res: Response) => {
     try {
         const result = await query(
-            `SELECT b.build_id, u.username, b.opponent_team, b.counter_team,
-                    b.gear_setup, b.note, b.likes, b.created_at
+            `SELECT b.build_id, u.username, u.avatar, b.opponent_team, b.counter_team,
+                    b.gear_setup, b.note, b.likes, b.is_public, b.created_at
              FROM user_builds b
              JOIN users u ON u.user_id = b.user_id
+             WHERE b.is_public = TRUE
              ORDER BY b.likes DESC, b.created_at DESC
              LIMIT 20`
         );
@@ -76,7 +77,7 @@ buildsRouter.post('/', requireAuth, async (req: Request, res: Response) => {
         const result = await query(
             `INSERT INTO user_builds (user_id, opponent_team, counter_team, gear_setup, note)
              VALUES ($1, $2, $3, $4, $5)
-             RETURNING build_id, opponent_team, counter_team, gear_setup, note, likes, created_at`,
+             RETURNING build_id, opponent_team, counter_team, gear_setup, note, likes, is_public, created_at`,
             [req.user!.userId, opponentTeam, counterTeam, JSON.stringify(gearSetup), note || null]
         );
 
@@ -134,5 +135,64 @@ buildsRouter.post('/:id/like', requireAuth, async (req: Request, res: Response) 
     } catch (err) {
         console.error('POST /api/builds/:id/like failed:', err);
         res.status(500).json({ error: 'Something went wrong.' });
+    }
+});
+
+// ---- CHANGE A BUILD'S PRIVACY (owner only) ----
+// PATCH /api/builds/:id  { isPublic: true|false }
+buildsRouter.patch('/:id', requireAuth, async (req: Request, res: Response) => {
+    try {
+        const buildId = Number(req.params.id);
+        if (!Number.isInteger(buildId)) {
+            res.status(400).json({ error: 'Invalid build.' });
+            return;
+        }
+        const isPublic = Boolean(req.body.isPublic);
+
+        // "AND user_id = $2" is the security check: it only updates the
+        // row if it belongs to the person asking, so nobody can change
+        // someone else's build.
+        const result = await query(
+            `UPDATE user_builds SET is_public = $1
+             WHERE build_id = $2 AND user_id = $3
+             RETURNING build_id, is_public`,
+            [isPublic, buildId, req.user!.userId]
+        );
+        if (result.rows.length === 0) {
+            res.status(404).json({ error: "That build wasn't found, or isn't yours." });
+            return;
+        }
+        res.json(result.rows[0]);
+
+    } catch (err) {
+        console.error('PATCH /api/builds/:id failed:', err);
+        res.status(500).json({ error: 'Something went wrong.' });
+    }
+});
+
+// ---- DELETE A BUILD (owner only) ----
+buildsRouter.delete('/:id', requireAuth, async (req: Request, res: Response) => {
+    try {
+        const buildId = Number(req.params.id);
+        if (!Number.isInteger(buildId)) {
+            res.status(400).json({ error: 'Invalid build.' });
+            return;
+        }
+
+        // same owner check as above. The likes for this build are
+        // removed automatically by the ON DELETE CASCADE rule.
+        const result = await query(
+            `DELETE FROM user_builds WHERE build_id = $1 AND user_id = $2 RETURNING build_id`,
+            [buildId, req.user!.userId]
+        );
+        if (result.rows.length === 0) {
+            res.status(404).json({ error: "That build wasn't found, or isn't yours." });
+            return;
+        }
+        res.json({ deleted: result.rows[0].build_id });
+
+    } catch (err) {
+        console.error('DELETE /api/builds/:id failed:', err);
+        res.status(500).json({ error: 'Something went wrong deleting that build.' });
     }
 });

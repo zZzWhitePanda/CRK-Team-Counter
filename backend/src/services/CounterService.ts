@@ -80,11 +80,11 @@ export class CounterService {
         // team, sorted by likes, top 5. Joined with users so the
         // site can show who made each build.
         const playerResult = await query(
-            `SELECT b.build_id, u.username, b.opponent_team, b.counter_team,
+            `SELECT b.build_id, u.username, u.avatar, b.opponent_team, b.counter_team,
                     b.gear_setup, b.note, b.likes
              FROM user_builds b
              JOIN users u ON u.user_id = b.user_id
-             WHERE b.opponent_team @> $1
+             WHERE b.opponent_team @> $1 AND b.is_public = TRUE
              ORDER BY b.likes DESC, b.created_at DESC
              LIMIT 5`,
             [enemyTeam]
