@@ -142,6 +142,11 @@ export function ProfilePage() {
 
     return (
         <div>
+            {/* Big prominent banner when the account is banned. Their
+                builds ALSO stay hidden from Community Builds while
+                the ban is in place; both come back on un-ban. */}
+            {profile.isBanned && <BannedBanner profile={profile} />}
+
             <ProfileHeader
                 profile={profile}
                 onSaved={updated => setProfile(p => p && { ...p, ...updated })}
@@ -437,5 +442,47 @@ function ProfileHeader({ profile, onSaved, saveProfile }: {
                 />
             )}
         </section>
+    );
+}
+
+
+// ============================================================
+// The big red banner at the top of a banned account's profile.
+// Everything else on the profile stays there because the ban
+// might be lifted later - only the banner and the community
+// listing are affected by the current ban state.
+// ============================================================
+function BannedBanner({ profile }: { profile: Profile }) {
+    // Ban expiry as a friendly string. The banner shows the *date*
+    // when it lifts, not seconds-until - "24 August 2026" reads
+    // more clearly than "in 13 days".
+    const until = profile.bannedUntil
+        ? new Date(profile.bannedUntil).toLocaleDateString('en-AU',
+            { day: 'numeric', month: 'long', year: 'numeric' })
+        : null;
+
+    return (
+        <div className="profile-banned-banner" role="alert">
+            <div className="profile-banned-banner-icon" aria-hidden="true">
+                <Ban size={30} />
+            </div>
+            <div style={{ flex: 1, minWidth: 200 }}>
+                <div className="profile-banned-banner-title">
+                    Account banned
+                </div>
+                <p style={{ marginTop: 4, fontSize: 14 }}>
+                    {profile.username} isn't allowed to log in right now, and their
+                    community builds have been taken down.
+                    {until
+                        ? <> The ban lifts on <strong>{until}</strong>.</>
+                        : <> This ban is permanent unless an admin lifts it.</>}
+                </p>
+                {profile.banReason && (
+                    <p style={{ marginTop: 6, fontSize: 14 }}>
+                        <strong>Reason:</strong> {profile.banReason}
+                    </p>
+                )}
+            </div>
+        </div>
     );
 }

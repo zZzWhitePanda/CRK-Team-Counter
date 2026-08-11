@@ -18,14 +18,13 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
-    Shield, Ban, CheckCircle2, Tag, Trash2, UserCog, Search,
-    AlertTriangle, Globe, Plus, X,
+    Shield, Ban, CheckCircle2, Trash2, UserCog, Search,
+    AlertTriangle, Plus, X,
 } from 'lucide-react';
 import {
-    StaffUser, PlayerBuild, Cookie, Title, IpBan,
+    StaffUser, PlayerBuild, Cookie, Title,
     getAllUsers, getBuilds, getCookies, deleteBuild,
     lookupUser, addUserTitle, removeUserTitle, setUserBanned,
-    getIpBans, addIpBan, removeIpBan,
 } from '../api';
 import { Avatar } from '../components/Avatar';
 import { TitleBadges } from '../components/TitleBadge';
@@ -61,11 +60,10 @@ export function AdminPage() {
     const isAdmin = user?.role === 'admin' || isOwner;
     const isStaff = isAdmin || user?.role === 'mod';
 
-    const [tab, setTab] = useState<'accounts' | 'builds' | 'ip'>('accounts');
+    const [tab, setTab] = useState<'accounts' | 'builds'>('accounts');
     const [users, setUsers] = useState<StaffUser[]>([]);
     const [builds, setBuilds] = useState<PlayerBuild[]>([]);
     const [roster, setRoster] = useState<Cookie[]>([]);
-    const [ipBans, setIpBans] = useState<IpBan[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
 
@@ -78,14 +76,11 @@ export function AdminPage() {
             isAdmin ? getAllUsers() : Promise.resolve([]),
             getBuilds('likes'),
             getCookies(),
-            isOwner ? getIpBans() : Promise.resolve([]),
         ])
-            .then(([u, b, c, ips]) => {
-                setUsers(u); setBuilds(b); setRoster(c); setIpBans(ips);
-            })
+            .then(([u, b, c]) => { setUsers(u); setBuilds(b); setRoster(c); })
             .catch(err => setError(err.message))
             .finally(() => setLoading(false));
-    }, [authLoading, isStaff, isAdmin, isOwner]);
+    }, [authLoading, isStaff, isAdmin]);
 
     if (authLoading || loading) {
         return <div className="skeleton" style={{ height: 200 }} />;
@@ -121,9 +116,9 @@ export function AdminPage() {
             </h1>
             <p className="muted" style={{ marginBottom: 20 }}>
                 {isOwner
-                    ? 'You can moderate builds, award any title (custom or preset), ban accounts, block IPs and appoint moderators.'
+                    ? 'You can moderate builds, award any title (custom or preset), ban accounts (with an IP ban option) and appoint moderators.'
                     : isAdmin
-                        ? 'You can moderate builds, award the Mod / OG / Content Creator titles, and ban accounts. Custom titles and IP bans are the owner\'s job.'
+                        ? 'You can moderate builds, award the Mod / OG / Content Creator titles, and ban accounts. Custom titles are the owner\'s job.'
                         : 'You can delete any community build. Titles and bans are the admin team\'s job.'}
             </p>
 
@@ -136,12 +131,6 @@ export function AdminPage() {
                     <Trash2 size={15} aria-hidden="true" /> Builds
                     <span className="group-count">{builds.length}</span>
                 </button>
-                {isOwner && (
-                    <button className={'pill' + (tab === 'ip' ? ' active' : '')} onClick={() => setTab('ip')}>
-                        <Globe size={15} aria-hidden="true" /> IP bans
-                        <span className="group-count">{ipBans.length}</span>
-                    </button>
-                )}
             </div>
 
             {error && <div className="error-box" role="alert" style={{ marginBottom: 16 }}>{error}</div>}
@@ -193,15 +182,6 @@ export function AdminPage() {
                 </div>
             )}
 
-            {/* ---- IP BANS (owner only) ---- */}
-            {tab === 'ip' && isOwner && (
-                <IpBansPanel
-                    bans={ipBans}
-                    onAdd={ban => setIpBans(list => [ban, ...list.filter(b => b.ip !== ban.ip)])}
-                    onRemove={ip => setIpBans(list => list.filter(b => b.ip !== ip))}
-                    onError={setError}
-                />
-            )}
         </div>
     );
 }
@@ -498,11 +478,14 @@ function ManageAccountControls({ account, onUpdated, onError, isOwner }: {
                                     {d.label}
                                 </button>
                             ))}
+                            {/* Wider than the other pills so the whole
+                                "Custom (days)" placeholder is readable -
+                                120px cut it off at "Custom (d". */}
                             <input
                                 className="input"
                                 type="number"
                                 min={1}
-                                style={{ width: 120 }}
+                                style={{ width: 170 }}
                                 value={customDays}
                                 placeholder="Custom (days)"
                                 onChange={e => setCustomDays(e.target.value)}
@@ -578,103 +561,5 @@ function BuildAdminRow({ build, roster, onDeleted, onError }: {
             </div>
             {build.note && <p className="build-card-note">{build.note}</p>}
         </div>
-    );
-}
-
-
-// ============================================================
-// The IP-bans tab. Owner-only.
-// ============================================================
-function IpBansPanel({ bans, onAdd, onRemove, onError }: {
-    bans: IpBan[];
-    onAdd: (b: IpBan) => void;
-    onRemove: (ip: string) => void;
-    onError: (msg: string) => void;
-}) {
-    const [ip, setIp] = useState('');
-    const [reason, setReason] = useState('');
-    const [minutes, setMinutes] = useState<number | null>(60 * 24 * 7);
-    const [customDays, setCustomDays] = useState('');
-    const [busy, setBusy] = useState(false);
-
-    async function submit() {
-        setBusy(true); onError('');
-        try {
-            const days = customDays.trim() ? Number(customDays.trim()) : NaN;
-            const dur = Number.isFinite(days) && days > 0 ? days * 24 * 60 : minutes;
-            const b = await addIpBan(ip.trim(), reason || undefined, dur);
-            onAdd(b);
-            setIp(''); setReason('');
-        } catch (err) {
-            onError(err instanceof Error ? err.message : "Couldn't ban that IP.");
-        } finally { setBusy(false); }
-    }
-
-    async function remove(target: string) {
-        if (!window.confirm(`Un-ban ${target}?`)) return;
-        try {
-            await removeIpBan(target);
-            onRemove(target);
-        } catch (err) {
-            onError(err instanceof Error ? err.message : "Couldn't un-ban.");
-        }
-    }
-
-    return (
-        <>
-            <div className="card">
-                <h2 style={{ fontSize: 17, marginBottom: 10 }}>Ban an IP</h2>
-                <p className="muted" style={{ fontSize: 13, marginBottom: 12 }}>
-                    Blocks any account trying to log in from this address, until the ban expires.
-                </p>
-                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 8 }}>
-                    <input className="input" style={{ maxWidth: 220 }} value={ip}
-                        onChange={e => setIp(e.target.value)} placeholder="e.g. 203.0.113.42" />
-                    <input className="input" style={{ flex: 1, minWidth: 200 }} value={reason}
-                        onChange={e => setReason(e.target.value)} placeholder="Reason (optional)" />
-                </div>
-                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 8 }}>
-                    {DURATIONS.map(d => (
-                        <button key={d.label}
-                            className={'pill' + (minutes === d.minutes && !customDays ? ' active' : '')}
-                            onClick={() => { setMinutes(d.minutes); setCustomDays(''); }}>
-                            {d.label}
-                        </button>
-                    ))}
-                    <input className="input" type="number" min={1} style={{ width: 120 }}
-                        value={customDays} placeholder="Custom (days)"
-                        onChange={e => setCustomDays(e.target.value)} />
-                </div>
-                <button className="pill danger" disabled={busy || !ip.trim()} onClick={submit}>
-                    <Ban size={14} aria-hidden="true" /> Add IP ban
-                </button>
-            </div>
-
-            <div className="admin-list" style={{ marginTop: 16 }}>
-                {bans.length === 0 && (
-                    <div className="card"><p className="muted">No active IP bans.</p></div>
-                )}
-                {bans.map(b => (
-                    <div key={b.ip} className="card admin-row">
-                        <Globe size={20} aria-hidden="true" style={{ color: 'var(--color-danger)' }} />
-                        <div className="admin-row-main">
-                            <div className="admin-row-name">
-                                <code>{b.ip}</code>
-                                {b.reason && <span className="muted">— {b.reason}</span>}
-                            </div>
-                            <div className="muted" style={{ fontSize: 13 }}>
-                                Since {new Date(b.banned_at).toLocaleDateString('en-AU')}
-                                {b.banned_until
-                                    ? ` · lifts ${new Date(b.banned_until).toLocaleString('en-AU')}`
-                                    : ' · permanent'}
-                            </div>
-                        </div>
-                        <button className="pill" onClick={() => remove(b.ip)}>
-                            <CheckCircle2 size={14} aria-hidden="true" /> Un-ban
-                        </button>
-                    </div>
-                ))}
-            </div>
-        </>
     );
 }

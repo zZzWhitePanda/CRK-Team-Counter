@@ -1796,3 +1796,41 @@ h3 { font-size: 18px; }
     background: var(--color-input);
     color: var(--color-text);
 }
+
+
+/* ============================================================
+   BANNED-ACCOUNT BANNER
+   Sits at the very top of a banned player's profile so it's the
+   first thing anyone sees, ahead of the header card.
+   ============================================================ */
+.profile-banned-banner {
+    display: flex;
+    align-items: center;
+    gap: 18px;
+    padding: 20px 24px;
+    margin-bottom: 20px;
+    border: 2px solid var(--color-danger);
+    border-radius: var(--radius);
+    background: color-mix(in srgb, var(--color-danger) 12%, var(--color-card));
+    color: var(--color-text);
+    box-shadow: 0 6px 20px color-mix(in srgb, var(--color-danger) 20%, transparent);
+    flex-wrap: wrap;
+}
+.profile-banned-banner-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 54px;
+    height: 54px;
+    flex-shrink: 0;
+    border-radius: 50%;
+    background: var(--color-danger);
+    color: #fff;
+    box-shadow: 0 0 22px color-mix(in srgb, var(--color-danger) 55%, transparent);
+}
+.profile-banned-banner-title {
+    font-family: var(--font-heading);
+    font-size: 22px;
+    color: var(--color-danger);
+    letter-spacing: 0.5px;
+}

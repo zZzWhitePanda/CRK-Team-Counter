@@ -105,6 +105,8 @@ export interface Profile {
     titles: Title[];
     role: Role;
     isBanned: boolean;
+    banReason: string | null;
+    bannedUntil: string | null;    // ISO string, null = permanent
     createdAt: string;
     isMe: boolean;         // true when you're looking at your own profile
     buildCount: number;

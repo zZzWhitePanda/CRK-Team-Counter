@@ -106,7 +106,7 @@ usersRouter.get('/:id', optionalAuth, async (req: Request, res: Response) => {
 
         const userResult = await query(
             `SELECT user_id, username, avatar, avatar_data, titles,
-                    banned_at, banned_until, created_at
+                    banned_at, banned_until, ban_reason, created_at
              FROM users WHERE user_id = $1`,
             [userId]
         );
@@ -179,6 +179,9 @@ usersRouter.get('/:id', optionalAuth, async (req: Request, res: Response) => {
                     : hasTitle(profileTitles, 'Mod')   ? 'mod'
                     : 'user',
                 isBanned: stillBanned,
+                banReason: stillBanned ? profile.ban_reason : null,
+                bannedUntil: stillBanned && profile.banned_until
+                    ? new Date(profile.banned_until).toISOString() : null,
                 createdAt: profile.created_at,
                 isMe,
                 buildCount: builds.filter(b => b.is_public).length,
@@ -369,13 +372,10 @@ usersRouter.post('/:id/ban', requireAdmin, async (req: Request, res: Response) =
             [bannedAt, bannedUntil, banned ? reason : null, userId]);
 
         // If they wanted an IP ban and we know the target's last
-        // IP, add it to the block list too. IP bans only make
-        // sense while banning, not while un-banning.
+        // IP, add it to the block list too.
         if (banned && ipBan) {
             const ip = target.rows[0].last_ip;
             if (!ip) {
-                // no login = no known IP. Don't fail the ban, just
-                // tell the caller.
                 res.json({ ...result.rows[0], ipBan: false, ipMessage: "No last-known IP to block for that account." });
                 return;
             }
@@ -386,6 +386,16 @@ usersRouter.post('/:id/ban', requireAdmin, async (req: Request, res: Response) =
                     SET banned_until = EXCLUDED.banned_until,
                         reason       = EXCLUDED.reason`,
                 [ip, bannedUntil, reason]);
+        }
+
+        // When un-banning, drop any IP ban that was placed alongside
+        // this account's ban. That way IP bans are entirely tied to
+        // the account ban and don't need a separate un-ban step.
+        if (!banned) {
+            const ip = target.rows[0].last_ip;
+            if (ip) {
+                await query('DELETE FROM banned_ips WHERE ip = $1', [ip]);
+            }
         }
 
         res.json({ ...result.rows[0], ipBan: banned && ipBan });

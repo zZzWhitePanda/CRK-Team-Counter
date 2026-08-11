@@ -95,10 +95,21 @@ function withAlpha(hex: string, alpha: number): string {
 }
 
 // ---- the built-in themes ------------------------------------
-// "Pink" is the default the site ships with. "CRK Dark" is the
-// original navy design from the mockups, kept as a preset.
+// "Dark" (the original CRK navy from the mockups) is the default
+// the site ships with. The others are alternatives.
 
 export const PRESET_THEMES: Theme[] = [
+    {
+        name: 'Dark',
+        colors: {
+            background: '#14162B',
+            surface: '#242850',
+            text: '#FFFFFF',
+            accent: '#8B7CF6',
+        },
+        backgroundImage: null,
+        backgroundOpacity: 0.25,
+    },
     {
         name: 'Pink',
         colors: {
@@ -106,17 +117,6 @@ export const PRESET_THEMES: Theme[] = [
             surface: '#DCD1D3',
             text: '#000000',
             accent: '#ffffff',
-        },
-        backgroundImage: null,
-        backgroundOpacity: 0.25,
-    },
-    {
-        name: 'CRK Dark',
-        colors: {
-            background: '#14162B',
-            surface: '#242850',
-            text: '#FFFFFF',
-            accent: '#8B7CF6',
         },
         backgroundImage: null,
         backgroundOpacity: 0.25,
