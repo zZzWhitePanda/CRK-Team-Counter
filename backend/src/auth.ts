@@ -16,6 +16,7 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { Request, Response, NextFunction } from 'express';
 import { query } from './db';
+import { Title, readTitles, isMod, isAdmin, isOwner } from './permissions';
 
 // the secret used to sign tokens. In production it's set as an
 // environment variable; the fallback is only for local dev.
@@ -89,19 +90,28 @@ export function requireAuth(req: Request, res: Response, next: NextFunction) {
     next();
 }
 
-// ---- role checks ----
-// There are three roles: user, admin and owner.
+// ---- power checks ----
+// Permissions are driven by TITLES, not a role column. Whoever
+// carries the Owner title is an owner; Admin makes them an admin,
+// Mod makes them a moderator. See permissions.ts.
 //
-//   admin - can delete any community build (moderation)
-//   owner - all of that, PLUS awarding titles, banning accounts and
-//           promoting/demoting admins
-//
-// Both checks re-read the role FROM THE DATABASE rather than
-// trusting what's inside the token. A token is issued at login and
-// never changes afterwards, so one made before someone was promoted
-// would still say "user" - and, worse, one made before someone was
-// DEMOTED would still say "admin". The database is the truth.
-function requireRole(allowed: string[], refusal: string) {
+// Both checks re-read titles FROM THE DATABASE rather than
+// trusting the login token. A token is issued at login and never
+// changes afterwards, so one made before somebody was promoted
+// would still say "no titles" - and, worse, one made before they
+// were DEMOTED would still say they were staff. The database is
+// the truth.
+
+/** Fetch someone's titles from the database. */
+export async function currentTitles(userId: number): Promise<Title[]> {
+    const result = await query('SELECT titles FROM users WHERE user_id = $1', [userId]);
+    return readTitles(result.rows[0]?.titles);
+}
+
+function requirePower(
+    check: (titles: Title[]) => boolean,
+    refusal: string,
+) {
     return async (req: Request, res: Response, next: NextFunction) => {
         const payload = readToken(req);
         if (!payload) {
@@ -109,27 +119,26 @@ function requireRole(allowed: string[], refusal: string) {
             return;
         }
         try {
-            const result = await query(
-                'SELECT role FROM users WHERE user_id = $1', [payload.userId]);
-            const role = result.rows[0]?.role;
-            if (!role || !allowed.includes(role)) {
-                // the same message however it failed, so this doesn't
-                // tell a stranger who the staff are
+            const titles = await currentTitles(payload.userId);
+            if (!check(titles)) {
+                // The same message however it failed, so this
+                // doesn't tell a stranger who the staff are.
                 res.status(403).json({ error: refusal });
                 return;
             }
             req.user = payload;
             next();
         } catch (err) {
-            console.error('role check failed:', err);
+            console.error('power check failed:', err);
             res.status(500).json({ error: 'Something went wrong.' });
         }
     };
 }
 
-// Admins moderate: they can delete any community build.
-export const requireAdmin = requireRole(['admin', 'owner'], 'Only a moderator can do that.');
-
-// The owner does everything an admin does, plus awarding titles,
-// banning accounts and promoting other admins.
-export const requireOwner = requireRole(['owner'], 'Only the site owner can do that.');
+// A moderator (or above) can delete any community build.
+export const requireMod   = requirePower(isMod,   'Only a moderator can do that.');
+// An admin (or the owner) can ban and award most titles.
+export const requireAdmin = requirePower(isAdmin, 'Only a moderator can do that.');
+// Only the owner can create custom titles, hand out Owner/Admin,
+// and use the owner-only bits of the admin panel.
+export const requireOwner = requirePower(isOwner, 'Only the site owner can do that.');

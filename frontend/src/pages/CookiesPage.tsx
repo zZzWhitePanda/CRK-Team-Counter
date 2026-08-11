@@ -25,7 +25,7 @@ export function CookiesPage() {
     const [type, setType] = useState('');           // '' means All
     const [rarity, setRarity] = useState('');
     const [sortField, setSortField] = useState<SortField>('rarity');
-    const [ascending, setAscending] = useState(true);
+    const [ascending, setAscending] = useState(false);  // default = highest first
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(true);
 

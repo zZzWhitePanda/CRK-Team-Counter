@@ -12,7 +12,7 @@ import { X } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { FollowUser, getFollowers, getFollowing } from '../api';
 import { Avatar } from './Avatar';
-import { TitleBadge } from './TitleBadge';
+import { TitleBadges } from './TitleBadge';
 
 interface Props {
     userId: number;
@@ -67,7 +67,7 @@ export function FollowListModal({ userId, username, kind, onClose }: Props) {
                         >
                             <Avatar who={u} username={u.username} size={38} />
                             <span className="follow-row-name">{u.username}</span>
-                            <TitleBadge title={u.title} small />
+                            <TitleBadges titles={u.titles} small />
                         </Link>
                     ))}
                 </div>

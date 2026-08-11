@@ -1673,3 +1673,126 @@ h3 { font-size: 18px; }
     border-color: color-mix(in srgb, var(--color-danger) 45%, transparent);
     display: inline-flex; align-items: center; gap: 4px;
 }
+
+
+/* ============================================================
+   MULTIPLE TITLES + STAFF NAV
+   ============================================================ */
+
+/* The Admin sidebar link is subtly outlined so it reads as staff
+   without being loud - matches the theme's accent because the
+   effective role sits ON the accent-derived surfaces. */
+.nav-button-staff {
+    border: 1px dashed var(--color-border-strong);
+    margin-top: 12px;
+}
+
+/* Sort-direction button, icon only. The previous version also
+   showed the words next to it ("Common -> Witch"); users found
+   that too wide, so the words moved to the button's title/aria. */
+.sort-direction.icon-only {
+    padding: 10px;
+    width: 42px;
+    min-width: 42px;
+    justify-content: center;
+}
+
+/* ---- view count on a build card ---- */
+.build-views {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 5px 10px;
+    border-radius: 999px;
+    background: var(--color-input);
+    color: var(--color-text-muted);
+    font-size: 13px;
+    font-weight: 600;
+}
+
+
+/* ============================================================
+   ADMIN PANEL: manage-account form, staff rows, IP bans
+   ============================================================ */
+
+.admin-manage code {
+    padding: 2px 6px;
+    border-radius: 4px;
+    background: var(--color-input);
+    font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+    font-size: 12px;
+}
+
+/* The row breaks into TWO parts: the always-visible summary and
+   an open/collapse-only "manage" area under it. The summary is
+   a flex row so avatar / name / manage-button lay out cleanly. */
+.admin-row-summary {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    flex-wrap: wrap;
+}
+
+/* one of the 5 preset colour buttons in the title picker */
+.admin-title-preset {
+    display: inline-flex;
+    align-items: center;
+    padding: 6px 12px;
+    font-family: var(--font-heading);
+    font-size: 12px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    background: transparent;
+    border: 1px solid;
+    border-radius: 999px;
+    cursor: pointer;
+    transition: transform 140ms var(--ease-bounce);
+}
+.admin-title-preset:hover:not(:disabled) { transform: translateY(-1px); }
+.admin-title-preset:active { transform: scale(0.95); }
+.admin-title-preset:disabled { cursor: not-allowed; }
+
+/* An existing title with a "remove" X. Same look as TitleBadge
+   but with a little chip button on the right. */
+.admin-title-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 4px 3px 10px;
+    font-family: var(--font-heading);
+    font-size: 12px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    border: 1px solid;
+    border-radius: 999px;
+}
+.admin-title-chip-remove {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    padding: 0;
+    background: none;
+    border: none;
+    color: inherit;
+    opacity: 0.7;
+    cursor: pointer;
+    border-radius: 50%;
+    transition: opacity 160ms var(--ease), background 160ms var(--ease);
+}
+.admin-title-chip-remove:hover {
+    opacity: 1;
+    background: color-mix(in srgb, currentColor 18%, transparent);
+}
+
+
+/* an IP shown as monospace, so it's obvious it's not a name */
+.admin-row code {
+    font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+    font-size: 12px;
+    padding: 1px 6px;
+    border-radius: 4px;
+    background: var(--color-input);
+    color: var(--color-text);
+}

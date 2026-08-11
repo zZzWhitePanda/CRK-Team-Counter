@@ -9,35 +9,97 @@
 import { Router, Request, Response } from 'express';
 import { query } from '../db';
 import { hashPassword, checkPassword, makeToken, requireAuth } from '../auth';
+import { readTitles, isMod, isAdmin, isOwner } from '../permissions';
 
 export const authRouter = Router();
 
 // small helper: the safe public view of a user (never the hash!)
 interface UserRow {
     user_id: number; username: string; email: string; is_admin: boolean;
-    role?: string; avatar?: string | null; avatar_data?: string | null;
-    title?: string | null; theme?: unknown;
+    avatar?: string | null; avatar_data?: string | null;
+    titles?: unknown; theme?: unknown;
+    username_changed_at?: Date | string | null;
 }
 function publicUser(row: UserRow) {
+    const titles = readTitles(row.titles);
     return {
         userId: row.user_id, username: row.username, email: row.email,
-        isAdmin: row.is_admin,
-        role: row.role ?? 'user',
+        isAdmin: isAdmin(titles),
+        // the effective role, worked out from the person's titles
+        // (see permissions.ts). Kept as a plain string so the
+        // frontend doesn't have to reason about titles for the
+        // simple "can I see the admin nav item" case.
+        role: isOwner(titles) ? 'owner'
+            : isAdmin(titles) ? 'admin'
+            : isMod(titles)   ? 'mod'
+            : 'user',
         avatar: row.avatar ?? null,
         avatarData: row.avatar_data ?? null,
-        title: row.title ?? null,
+        titles,
         theme: row.theme ?? null,
+        usernameChangeableAt: nextRenameAllowed(row.username_changed_at ?? null),
     };
 }
 
 // The columns every route below reads back, kept in one place so
 // they can't drift apart.
-//
-// There is no longer a username cooldown: profiles live at
-// /u/<user_id>, so renaming no longer breaks anyone's link and
-// there is nothing to protect against.
 const USER_COLUMNS =
-    'user_id, username, email, is_admin, role, avatar, avatar_data, title, theme';
+    'user_id, username, email, is_admin, avatar, avatar_data, titles, theme, username_changed_at';
+
+// ---- username-change cooldown ----
+// Renaming is limited to once every 3 days: it plays with the
+// name-hold pool so someone can't churn through names and burn
+// through the pool's 14-day slots.
+export const RENAME_COOLDOWN_DAYS = 3;
+export const NAME_HOLD_DAYS = 14;
+
+/** When the current user may next change their username, or null. */
+function nextRenameAllowed(lastChanged: Date | string | null): string | null {
+    if (!lastChanged) return null;
+    const next = new Date(lastChanged);
+    next.setDate(next.getDate() + RENAME_COOLDOWN_DAYS);
+    return next.getTime() > Date.now() ? next.toISOString() : null;
+}
+
+/**
+ * Is this name available for `userId` to take (either the
+ * username field on some other row, or someone else's hold)?
+ * Case-insensitive to match the UNIQUE rule. Empty error message
+ * = it's free.
+ */
+/** Human-readable "you're banned because…" message. */
+function banMessage(reason: string | null, until: Date | string | null, ip = false): string {
+    const who = ip ? 'This IP address' : 'This account';
+    const parts = [`${who} has been banned.`];
+    if (reason) parts.push(`Reason: ${reason}.`);
+    if (until) {
+        const when = new Date(until).toLocaleString('en-AU',
+            { day: 'numeric', month: 'long', year: 'numeric', hour: 'numeric', minute: '2-digit' });
+        parts.push(`Access returns after ${when}.`);
+    }
+    return parts.join(' ');
+}
+
+async function nameConflict(username: string, userId: number | null): Promise<string> {
+    const lower = username.toLowerCase();
+
+    const taken = await query(
+        'SELECT user_id FROM users WHERE LOWER(username) = $1',
+        [lower]);
+    if (taken.rows.length > 0 && taken.rows[0].user_id !== userId) {
+        return 'That username is already taken.';
+    }
+
+    // an unexpired hold blocks anyone but the person the hold is for
+    const held = await query(
+        `SELECT held_for_user_id FROM username_holds
+         WHERE username_lower = $1 AND expires_at > NOW()`,
+        [lower]);
+    if (held.rows.length > 0 && held.rows[0].held_for_user_id !== userId) {
+        return "That username is being held by someone else for now — it'll be released soon.";
+    }
+    return '';
+}
 
 // ---- checking an uploaded profile picture ----
 // The browser shrinks the picture to 128x128 and re-compresses it
@@ -86,6 +148,17 @@ authRouter.post('/signup', async (req: Request, res: Response) => {
             return;
         }
 
+        // The database's UNIQUE rule blocks two users with the
+        // same name, but the hold pool is a separate table so it
+        // has to be checked in code too. Doing it BEFORE the
+        // hashing (which is deliberately slow) saves the effort
+        // when the name is already gone.
+        const clash = await nameConflict(username, null);
+        if (clash) {
+            res.status(409).json({ error: clash });
+            return;
+        }
+
         // hash the password BEFORE it ever touches the database
         const passwordHash = await hashPassword(password);
 
@@ -119,7 +192,7 @@ authRouter.post('/login', async (req: Request, res: Response) => {
         const password = String(req.body.password ?? '');
 
         const result = await query(
-            `SELECT ${USER_COLUMNS}, password_hash, banned_at, ban_reason
+            `SELECT ${USER_COLUMNS}, password_hash, banned_at, banned_until, ban_reason
              FROM users WHERE email = $1`,
             [email]
         );
@@ -136,13 +209,36 @@ authRouter.post('/login', async (req: Request, res: Response) => {
         // A banned account keeps all its data but can't get back in.
         // This is checked AFTER the password, so it can't be used to
         // find out which emails are banned without knowing the password.
-        if (user.banned_at) {
+        //
+        // banned_until is when the ban lifts (NULL = permanent). Once
+        // that time passes the account works normally again, without
+        // an admin having to do anything.
+        if (user.banned_at && (user.banned_until === null || new Date(user.banned_until) > new Date())) {
             res.status(403).json({
-                error: user.ban_reason
-                    ? `This account has been banned. Reason: ${user.ban_reason}`
-                    : 'This account has been banned.',
+                error: banMessage(user.ban_reason, user.banned_until),
             });
             return;
+        }
+
+        // Refuse anyone signing in from a banned IP, whichever
+        // account they're using. This is what makes an IP ban
+        // actually stop a person coming back on a new account.
+        const ip = req.ip ?? '';
+        if (ip) {
+            const ipBan = await query(
+                `SELECT reason, banned_until FROM banned_ips
+                 WHERE ip = $1 AND (banned_until IS NULL OR banned_until > NOW())`,
+                [ip]);
+            if (ipBan.rows.length > 0) {
+                res.status(403).json({
+                    error: banMessage(ipBan.rows[0].reason, ipBan.rows[0].banned_until, true),
+                });
+                return;
+            }
+            // remember the last IP they signed in from, so an owner
+            // can see which IP to add to the ban list later
+            await query('UPDATE users SET last_ip = $1 WHERE user_id = $2',
+                [ip, user.user_id]);
         }
 
         const token = makeToken({ userId: user.user_id, username: user.username, isAdmin: user.is_admin });
@@ -185,6 +281,12 @@ authRouter.patch('/me', requireAuth, async (req: Request, res: Response) => {
         const sets: string[] = [];
         const params: unknown[] = [];
 
+        // The rename branch is complicated by two rules:
+        //   * you can only change your name once every 3 days
+        //   * releasing your old name puts it in a hold pool for
+        //     14 days, so nobody else can grab it while you decide
+        //     whether to keep the new one
+        let renameFrom: string | null = null;
         if (req.body.username !== undefined) {
             const username = String(req.body.username).trim();
             if (username.length < 3) {
@@ -196,8 +298,38 @@ authRouter.patch('/me', requireAuth, async (req: Request, res: Response) => {
                 return;
             }
 
-            params.push(username);
-            sets.push(`username = $${params.length}`);
+            const current = await query(
+                'SELECT username, username_changed_at FROM users WHERE user_id = $1',
+                [req.user!.userId]);
+            const currentName = current.rows[0]?.username;
+
+            // re-saving the SAME name doesn't do anything (and
+            // shouldn't start the 3-day cooldown)
+            if (username !== currentName) {
+                const blockedUntil = nextRenameAllowed(current.rows[0]?.username_changed_at);
+                if (blockedUntil) {
+                    const when = new Date(blockedUntil).toLocaleDateString('en-AU',
+                        { day: 'numeric', month: 'long', year: 'numeric' });
+                    res.status(429).json({
+                        error: `You can change your username once every ${RENAME_COOLDOWN_DAYS} days. `
+                             + `Next change available on ${when}.`,
+                    });
+                    return;
+                }
+
+                // is it taken - by someone else, or in someone
+                // else's hold slot?
+                const clash = await nameConflict(username, req.user!.userId);
+                if (clash) {
+                    res.status(409).json({ error: clash });
+                    return;
+                }
+
+                renameFrom = currentName ?? null;
+                params.push(username);
+                sets.push(`username = $${params.length}`);
+                sets.push('username_changed_at = NOW()');
+            }
         }
 
         if (req.body.avatar !== undefined) {
@@ -248,6 +380,29 @@ authRouter.patch('/me', requireAuth, async (req: Request, res: Response) => {
         );
 
         const user = result.rows[0];
+
+        // The username they just RELEASED goes into the hold pool
+        // for 14 days: nobody else can take it in that window, but
+        // they can change back to it. ON CONFLICT means picking up
+        // a name they held before just resets its expiry clock.
+        if (renameFrom) {
+            await query(
+                `INSERT INTO username_holds (username_lower, held_for_user_id, expires_at)
+                 VALUES ($1, $2, NOW() + ($3 || ' days')::INTERVAL)
+                 ON CONFLICT (username_lower) DO UPDATE
+                    SET held_for_user_id = EXCLUDED.held_for_user_id,
+                        expires_at       = EXCLUDED.expires_at`,
+                [renameFrom.toLowerCase(), req.user!.userId, NAME_HOLD_DAYS]);
+
+            // Their NEW name shouldn't be blocked by any old hold
+            // (their own or nobody's - nameConflict already refused
+            // one held for someone else). Clearing it stops a
+            // stale hold from confusing later checks.
+            await query(
+                'DELETE FROM username_holds WHERE username_lower = $1',
+                [user.username.toLowerCase()]);
+        }
+
         // the username is inside the login token, so hand back a fresh
         // token whenever it changes
         const token = makeToken({ userId: user.user_id, username: user.username, isAdmin: user.is_admin });

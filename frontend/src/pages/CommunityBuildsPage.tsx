@@ -4,9 +4,9 @@
 // (FR05) and like buttons on every build (FR06/FR07).
 // ============================================================
 
-import { useEffect, useState } from 'react';
-import { Trophy, Plus, Settings2, Gem } from 'lucide-react';
-import { Cookie, PlayerBuild, getCookies, getTopBuilds, likeBuild, submitBuild } from '../api';
+import React, { useEffect, useState } from 'react';
+import { Plus, Settings2, Gem, Heart, Eye, Sparkles, Clock } from 'lucide-react';
+import { Cookie, PlayerBuild, BuildSort, getCookies, getBuilds, likeBuild, submitBuild, countBuildView } from '../api';
 import { BuildCard } from '../components/BuildCard';
 import { BuildDetail } from '../components/BuildDetail';
 import { CookiePicker } from '../components/CookiePicker';
@@ -30,15 +30,33 @@ export function CommunityBuildsPage() {
     const [showForm, setShowForm] = useState(false);
     // the build whose full details popup is open, if any
     const [openBuild, setOpenBuild] = useState<PlayerBuild | null>(null);
+    const [sort, setSort] = useState<BuildSort>('likes');
 
-    function load() {
-        Promise.all([getTopBuilds(), getCookies()])
+    // reload builds when the sort or login state changes.
+    useEffect(() => {
+        Promise.all([getBuilds(sort), getCookies()])
             .then(([topBuilds, cookies]) => { setBuilds(topBuilds); setRoster(cookies); })
             .catch(err => setError(err.message))
             .finally(() => setLoaded(true));
+    }, [user, sort]);
+
+    // ---- view counting ----
+    // The browser sends a POST when the detail popup opens, and
+    // remembers per build in localStorage so a refresh doesn't
+    // run the number up. The key includes today's date so it can
+    // be counted again tomorrow.
+    function handleOpen(build: PlayerBuild) {
+        setOpenBuild(build);
+        const today = new Date().toISOString().slice(0, 10);
+        const key = `crk_viewed_${build.build_id}_${today}`;
+        if (!localStorage.getItem(key)) {
+            countBuildView(build.build_id).catch(() => {});
+            localStorage.setItem(key, '1');
+            // reflect the new count on the card without a refetch
+            setBuilds(prev => prev.map(b =>
+                b.build_id === build.build_id ? { ...b, views: (b.views ?? 0) + 1 } : b));
+        }
     }
-    // reload builds when login state changes (to get likedByMe)
-    useEffect(load, [user]);
 
     // ---- liking (FR06/FR07) ----
     async function handleLike(buildId: number) {
@@ -59,13 +77,21 @@ export function CommunityBuildsPage() {
         <div>
             <h1 style={{ marginBottom: 16 }}>Community Builds</h1>
 
-            <div style={{ display: 'flex', gap: 8, marginBottom: 24, flexWrap: 'wrap' }}>
-                <button className="pill active" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <Trophy size={16} aria-hidden="true" /> Top
-                </button>
+            {/* ---- sort + submit ---- */}
+            <div style={{ display: 'flex', gap: 8, marginBottom: 24, flexWrap: 'wrap', alignItems: 'center' }}>
+                <span className="sort-label">Sort by</span>
+                <SortPill icon={<Heart size={14} aria-hidden="true" />} label="Most liked"
+                    active={sort === 'likes'} onClick={() => setSort('likes')} />
+                <SortPill icon={<Eye size={14} aria-hidden="true" />} label="Most viewed"
+                    active={sort === 'views'} onClick={() => setSort('views')} />
+                <SortPill icon={<Clock size={14} aria-hidden="true" />} label="Newest"
+                    active={sort === 'newest'} onClick={() => setSort('newest')} />
+                <SortPill icon={<Sparkles size={14} aria-hidden="true" />} label="Featured"
+                    active={sort === 'featured'} onClick={() => setSort('featured')} />
+
                 <button
                     className="pill"
-                    style={{ display: 'flex', alignItems: 'center', gap: 6 }}
+                    style={{ marginLeft: 'auto' }}
                     onClick={() => user ? setShowForm(v => !v) : setShowAuth(true)}
                 >
                     <Plus size={16} aria-hidden="true" />
@@ -106,8 +132,10 @@ export function CommunityBuildsPage() {
                     key={build.build_id}
                     build={build}
                     roster={roster}
-                    rank={index + 1}
-                    onOpen={() => setOpenBuild(build)}
+                    // Only show the rank badge when the order is
+                    // by likes - it doesn't make sense on "Newest"
+                    rank={sort === 'likes' ? index + 1 : undefined}
+                    onOpen={() => handleOpen(build)}
                     onLike={() => handleLike(build.build_id)}
                 />
             ))}
@@ -125,6 +153,20 @@ export function CommunityBuildsPage() {
 
             {showAuth && <AuthModal onClose={() => setShowAuth(false)} />}
         </div>
+    );
+}
+
+// ---- one of the four sort options ----
+function SortPill({ icon, label, active, onClick }: {
+    icon: React.ReactNode;
+    label: string;
+    active: boolean;
+    onClick: () => void;
+}) {
+    return (
+        <button className={'pill' + (active ? ' active' : '')} onClick={onClick}>
+            {icon}{label}
+        </button>
     );
 }
 

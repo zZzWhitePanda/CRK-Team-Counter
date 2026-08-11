@@ -1,39 +1,45 @@
 // ============================================================
-// TitleBadge.tsx - the little badge next to someone's name
-// ('OG', 'Owner', 'Admin', …). Only an admin can award one, so
-// seeing a badge means something.
+// TitleBadge.tsx - the coloured badges next to someone's name.
 //
-// Well-known titles get their own colour; anything else falls back
-// to the site's purple, so a made-up title still looks deliberate.
+// A user has an ARRAY of titles now: e.g. an owner + content
+// creator would show both. Each title carries its own colour,
+// picked by the owner when it was awarded. This component only
+// draws them - it doesn't decide what anything means.
+//
+// The old version got a title's colour from a fixed lookup by
+// name; that has moved into the database (users.titles[i].color).
 // ============================================================
 
+import { Title } from '../api';
+
 interface Props {
-    title: string | null | undefined;
+    titles: Title[] | undefined | null;
     small?: boolean;      // for build cards, where space is tight
 }
 
-// colours for the titles worth recognising on sight
-const KNOWN: Record<string, string> = {
-    owner: 'var(--rarity-ancient)',      // gold
-    admin: 'var(--color-enemy)',         // red
-    og: 'var(--color-rank)',             // teal
-    mod: 'var(--color-ally)',            // cyan
-    moderator: 'var(--color-ally)',
-    veteran: 'var(--rarity-super-epic)', // pink
-    legend: 'var(--rarity-legendary)',
-};
-
-export function TitleBadge({ title, small }: Props) {
-    if (!title) return null;
-    const colour = KNOWN[title.toLowerCase()] ?? 'var(--color-primary)';
-
+export function TitleBadges({ titles, small }: Props) {
+    if (!titles || titles.length === 0) return null;
     return (
-        <span
-            className={'title-badge' + (small ? ' small' : '')}
-            style={{ color: colour, borderColor: colour }}
-            title={`${title} — awarded by an admin`}
-        >
-            {title}
-        </span>
+        <>
+            {titles.map(t => (
+                <span
+                    key={t.name}
+                    className={'title-badge' + (small ? ' small' : '')}
+                    style={{ color: t.color, borderColor: t.color }}
+                    title={t.name}
+                >
+                    {t.name}
+                </span>
+            ))}
+        </>
     );
+}
+
+/**
+ * Draws a SINGLE title. Kept because a few places (e.g. staff-only
+ * indicators) hand-build a single badge rather than reading a list.
+ */
+export function TitleBadge({ title, small }: { title: Title | null; small?: boolean }) {
+    if (!title) return null;
+    return <TitleBadges titles={[title]} small={small} />;
 }

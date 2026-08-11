@@ -20,7 +20,7 @@ import { useTheme } from '../themeContext';
 import { AuthModal } from '../components/AuthModal';
 import { Avatar } from '../components/Avatar';
 import { ThemeEditor } from '../components/ThemeEditor';
-import { TitleBadge } from '../components/TitleBadge';
+import { TitleBadges } from '../components/TitleBadge';
 import { PRESET_THEMES, Theme, normaliseTheme } from '../theme';
 import {
     SavedTheme, getMyThemes, saveThemePreset, deleteThemePreset,
@@ -91,7 +91,7 @@ export function SettingsPage() {
                             <div style={{ flex: 1, minWidth: 160 }}>
                                 <div style={{ color: 'var(--color-text)', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                                     <Link to={`/u/${user.userId}`} className="username-link">{user.username}</Link>
-                                    <TitleBadge title={user.title} small />
+                                    <TitleBadges titles={user.titles} small />
                                 </div>
                                 <div className="muted" style={{ fontSize: 14 }}>{user.email}</div>
                             </div>

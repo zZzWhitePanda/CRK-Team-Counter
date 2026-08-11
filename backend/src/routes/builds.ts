@@ -1,9 +1,10 @@
 // ============================================================
 // routes/builds.ts - community counter teams (FR05/FR06/FR07/FR08).
 //
-// GET  /api/builds/top          most-liked builds (public)
-// POST /api/builds              submit a build      (login required)
-// POST /api/builds/:id/like     like / unlike       (login required)
+// GET  /api/builds             browse builds with ?sort= (public)
+// POST /api/builds             submit a build      (login required)
+// POST /api/builds/:id/like    like / unlike       (login required)
+// POST /api/builds/:id/view    count a view        (public)
 //
 // When a logged-in user calls these, each build also comes back
 // with "likedByMe" so the heart can show filled or empty.
@@ -11,7 +12,8 @@
 
 import { Router, Request, Response } from 'express';
 import { query } from '../db';
-import { requireAuth, optionalAuth } from '../auth';
+import { requireAuth, optionalAuth, currentTitles } from '../auth';
+import { isMod } from '../permissions';
 
 export const buildsRouter = Router();
 
@@ -29,26 +31,55 @@ async function markLiked(builds: { build_id: number; likedByMe?: boolean }[], us
     return builds;
 }
 
-// ---- TOP BUILDS (public, FR08) ----
-buildsRouter.get('/top', optionalAuth, async (req: Request, res: Response) => {
+// ---- BROWSE BUILDS (public) ----
+// Replaces the old /top endpoint. The order is picked with ?sort=:
+//
+//   likes    - most liked (default)
+//   views    - most viewed
+//   newest   - most recent first
+//   featured - Content-Creator builds first, then most liked
+//
+// The old /top URL still points here so any bookmark keeps working.
+const SORTS: Record<string, string> = {
+    likes:    'b.likes DESC, b.created_at DESC',
+    views:    'b.views DESC, b.created_at DESC',
+    newest:   'b.created_at DESC',
+    // "Featured" sorts creators to the top. `titles @> '[{...}]'`
+    // asks Postgres whether that title is in the JSONB array.
+    featured: `(u.titles @> '[{"name": "Content Creator"}]') DESC, b.likes DESC, b.created_at DESC`,
+};
+
+async function browse(req: Request, res: Response) {
     try {
+        const sortKey = String(req.query.sort ?? 'likes');
+        // `sortBy` is picked from the fixed SORTS map, NOT built
+        // from the query string, so it can't be used to inject SQL
+        // (NFR05). Anything unknown falls back to the default.
+        const sortBy = SORTS[sortKey] ?? SORTS.likes;
+
         const result = await query(
-            `SELECT b.build_id, b.user_id, u.username, u.avatar, u.avatar_data, u.title, b.opponent_team, b.counter_team,
-                    b.gear_setup, b.note, b.likes, b.is_public, b.created_at
+            `SELECT b.build_id, b.user_id, u.username, u.avatar, u.avatar_data, u.titles,
+                    b.opponent_team, b.counter_team,
+                    b.gear_setup, b.note, b.likes, b.views, b.is_public, b.created_at
              FROM user_builds b
              JOIN users u ON u.user_id = b.user_id
              -- banned accounts drop out of the public list; their
              -- builds aren't deleted, so un-banning restores them
-             WHERE b.is_public = TRUE AND u.banned_at IS NULL
-             ORDER BY b.likes DESC, b.created_at DESC
-             LIMIT 20`
+             WHERE b.is_public = TRUE
+               AND (u.banned_at IS NULL
+                    OR (u.banned_until IS NOT NULL AND u.banned_until <= NOW()))
+             ORDER BY ${sortBy}
+             LIMIT 50`
         );
         res.json(await markLiked(result.rows, req.user?.userId));
     } catch (err) {
-        console.error('GET /api/builds/top failed:', err);
+        console.error('GET /api/builds failed:', err);
         res.status(500).json({ error: 'Something went wrong loading the builds.' });
     }
-});
+}
+
+buildsRouter.get('/', optionalAuth, browse);
+buildsRouter.get('/top', optionalAuth, browse);   // old URL kept for compatibility
 
 // ---- SUBMIT A BUILD (login required, FR05) ----
 buildsRouter.post('/', requireAuth, async (req: Request, res: Response) => {
@@ -184,8 +215,9 @@ buildsRouter.delete('/:id', requireAuth, async (req: Request, res: Response) => 
         // Staff can remove ANY build - that's the moderation power.
         // Everyone else can only remove their own, which is what the
         // "AND user_id = $2" below enforces.
-        const me = await query('SELECT role FROM users WHERE user_id = $1', [req.user!.userId]);
-        const isStaff = ['admin', 'owner'].includes(me.rows[0]?.role);
+        // A moderator (or above) can remove ANY build; everyone
+        // else is restricted to their own by the "AND user_id" below.
+        const isStaff = isMod(await currentTitles(req.user!.userId));
 
         // The likes for this build are removed automatically by the
         // ON DELETE CASCADE rule on build_likes.
@@ -206,5 +238,35 @@ buildsRouter.delete('/:id', requireAuth, async (req: Request, res: Response) => 
     } catch (err) {
         console.error('DELETE /api/builds/:id failed:', err);
         res.status(500).json({ error: 'Something went wrong deleting that build.' });
+    }
+});
+
+
+// ---- COUNT A VIEW ----
+// The browser POSTs here when the detail popup opens for a
+// build. There's no rate-limit at the server side - the frontend
+// stores which build has been counted today in localStorage, so
+// a refresh doesn't run the number up. Nothing user-facing
+// depends on the count being exact, so that's fine for now.
+buildsRouter.post('/:id/view', async (req: Request, res: Response) => {
+    try {
+        const buildId = Number(req.params.id);
+        if (!Number.isInteger(buildId)) {
+            res.status(400).json({ error: 'Invalid build.' });
+            return;
+        }
+        const result = await query(
+            `UPDATE user_builds SET views = views + 1
+             WHERE build_id = $1 AND is_public = TRUE
+             RETURNING views`,
+            [buildId]);
+        if (result.rows.length === 0) {
+            res.status(404).json({ error: 'That build could not be found.' });
+            return;
+        }
+        res.json({ views: result.rows[0].views });
+    } catch (err) {
+        console.error('POST /api/builds/:id/view failed:', err);
+        res.status(500).json({ error: 'Something went wrong.' });
     }
 });

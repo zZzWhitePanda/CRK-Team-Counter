@@ -51,7 +51,7 @@ export interface PlayerBuild {
     user_id?: number;              // the author, so their name can link to /u/<id>
     avatar?: string | null;        // the author's cookie-portrait avatar
     avatar_data?: string | null;   // or their uploaded picture
-    title?: string | null;         // their owner-awarded badge
+    titles?: Title[];              // their titles: array of { name, color }
     opponent_team: string[];
     counter_team: string[];
     // gear_setup holds the whole rich build (toppings, beascuits,
@@ -60,6 +60,7 @@ export interface PlayerBuild {
     gear_setup: unknown;
     note: string | null;
     likes: number;
+    views?: number;
     likedByMe?: boolean;   // only set when logged in
     is_public?: boolean;
     created_at?: string;
@@ -77,17 +78,23 @@ export interface AuthUser {
     email: string;
     isAdmin: boolean;
     role: Role;
-    avatar: string | null;       // a cookie portrait filename
-    avatarData: string | null;   // or an uploaded picture, as a data URI
-    title: string | null;        // owner-awarded badge ('OG', 'Owner'…)
+    avatar: string | null;       // a cookie portrait filename (legacy - upload only now)
+    avatarData: string | null;   // uploaded picture, as a data URI
+    titles: Title[];             // owner-awarded badges
     theme: unknown;              // their saved theme, or null
+    usernameChangeableAt: string | null;  // null = right now
+}
+
+export interface Title {
+    name: string;
+    color: string;
 }
 
 // What someone is allowed to do.
 //   user  - a normal player
 //   admin - can delete any community build (moderation)
 //   owner - all of that, plus titles, bans and promoting admins
-export type Role = 'user' | 'admin' | 'owner';
+export type Role = 'user' | 'mod' | 'admin' | 'owner';
 
 // someone's public profile (anyone can view anyone's)
 export interface Profile {
@@ -95,9 +102,8 @@ export interface Profile {
     username: string;
     avatar: string | null;
     avatarData: string | null;
-    title: string | null;
+    titles: Title[];
     role: Role;
-    isAdmin: boolean;
     isBanned: boolean;
     createdAt: string;
     isMe: boolean;         // true when you're looking at your own profile
@@ -109,18 +115,19 @@ export interface Profile {
     viewerRole: Role;      // what the person LOOKING is allowed to do
 }
 
-// one account row in the admin panel
-export interface AdminUser {
+// Extra fields on a profile row in the admin panel
+export interface StaffUser {
     user_id: number;
     username: string;
     avatar: string | null;
     avatar_data: string | null;
-    title: string | null;
-    role: Role;
+    titles: Title[];
     banned_at: string | null;
+    banned_until: string | null;
     ban_reason: string | null;
+    last_ip: string | null;
     created_at: string;
-    build_count: string;   // Postgres COUNT comes back as a string
+    build_count: string;
 }
 
 // one entry in a followers / following list
@@ -129,7 +136,7 @@ export interface FollowUser {
     username: string;
     avatar: string | null;
     avatar_data: string | null;
-    title: string | null;
+    titles: Title[];
 }
 
 // ---- helper: fetch + throw a readable error if it failed ------
@@ -195,9 +202,17 @@ export function lookupCounters(enemyTeam: string[], enemyGear: GearSetup) {
 
 // ---- community builds -----------------------------------------
 
-// GET /api/builds/top - most liked builds (FR08)
-export function getTopBuilds() {
-    return getJson<PlayerBuild[]>('/api/builds/top');
+// GET /api/builds?sort=likes|views|newest|featured (FR08)
+export type BuildSort = 'likes' | 'views' | 'newest' | 'featured';
+export function getBuilds(sort: BuildSort = 'likes') {
+    return getJson<PlayerBuild[]>(`/api/builds?sort=${sort}`);
+}
+// old name kept for anywhere still using it
+export const getTopBuilds = () => getBuilds('likes');
+
+// POST /api/builds/:id/view - count a view (per-browser dedup done by caller)
+export function countBuildView(buildId: number) {
+    return postJson<{ views: number }>(`/api/builds/${buildId}/view`, {});
 }
 
 // POST /api/builds - submit a build (login required, FR05).
@@ -290,29 +305,57 @@ export function getFollowing(userId: number) {
 // role stored in the database. Hiding the buttons is only tidiness;
 // the 403 is the real protection.
 
-// GET /api/users - every account (admins and the owner)
+// GET /api/users - every account (staff)
 export function getAllUsers() {
-    return getJson<AdminUser[]>('/api/users');
+    return getJson<StaffUser[]>('/api/users');
 }
 
-// PATCH /api/users/:id/title - award or clear a badge (OWNER only)
-export function setUserTitle(userId: number, title: string | null) {
-    return patchJson<{ user_id: number; username: string; title: string | null }>(
-        `/api/users/${userId}/title`, { title });
+// GET /api/users/lookup?q=... - find an account by id OR username
+export function lookupUser(q: string) {
+    return getJson<StaffUser>('/api/users/lookup?q=' + encodeURIComponent(q));
 }
 
-// PATCH /api/users/:id/role - make somebody a moderator, or undo it
-// (OWNER only). The owner's own role can't be changed.
-export function setUserRole(userId: number, role: 'user' | 'admin') {
-    return patchJson<{ user_id: number; username: string; role: Role }>(
-        `/api/users/${userId}/role`, { role });
+// POST /api/users/:id/titles - award a title. Admin can only hand
+// out the non-staff presets; owner can hand out anything.
+export function addUserTitle(userId: number, name: string, color: string) {
+    return postJson<{ userId: number; titles: Title[] }>(
+        `/api/users/${userId}/titles`, { name, color });
 }
 
-// POST /api/users/:id/ban - ban or un-ban (OWNER only). A ban keeps
-// all their data and only stops them logging in.
-export function setUserBanned(userId: number, banned: boolean, reason?: string) {
-    return postJson<{ user_id: number; username: string; banned_at: string | null; ban_reason: string | null }>(
-        `/api/users/${userId}/ban`, { banned, reason });
+// DELETE /api/users/:id/titles/:name - remove a title
+export function removeUserTitle(userId: number, name: string) {
+    return getJson<{ userId: number; titles: Title[] }>(
+        `/api/users/${userId}/titles/${encodeURIComponent(name)}`,
+        { method: 'DELETE' });
+}
+
+// POST /api/users/:id/ban  { banned, reason?, minutes?, ipBan? }
+export function setUserBanned(userId: number, opts: {
+    banned: boolean; reason?: string; minutes?: number | null; ipBan?: boolean;
+}) {
+    return postJson<{
+        user_id: number; username: string;
+        banned_at: string | null; banned_until: string | null;
+        ban_reason: string | null; ipBan?: boolean; ipMessage?: string;
+    }>(`/api/users/${userId}/ban`, opts);
+}
+
+// ---- IP bans (owner) ----------------------------------------
+export interface IpBan {
+    ip: string;
+    reason: string | null;
+    banned_at: string;
+    banned_until: string | null;
+}
+export const getIpBans      = () => getJson<IpBan[]>('/api/ip-bans');
+export const addIpBan       = (ip: string, reason?: string, minutes?: number | null) =>
+    postJson<IpBan>('/api/ip-bans', { ip, reason, minutes });
+export const removeIpBan    = (ip: string) =>
+    getJson<{ deleted: string }>('/api/ip-bans/' + encodeURIComponent(ip), { method: 'DELETE' });
+
+// GET /api/users/me/likes - builds I've liked
+export function getLikedBuilds() {
+    return getJson<PlayerBuild[]>('/api/users/me/likes');
 }
 
 // ---- themes ---------------------------------------------------

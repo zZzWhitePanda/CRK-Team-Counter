@@ -1,120 +1,92 @@
 // ============================================================
 // AdminPage.tsx - the staff panel, at /admin.
 //
-// What you can do depends on your role:
+// What you see depends on your top title:
 //
-//   admin (moderator) - delete any community build
-//   owner             - all of that, plus award titles, ban
-//                       accounts, and make/unmake moderators
+//   Mod   - delete any community build
+//   Admin - all of the above, plus award the non-staff preset
+//           titles (Mod, OG, Content Creator), and ban accounts
+//   Owner - all of the above, plus custom titles and IP bans
 //
-// Every button here is backed by a check on the SERVER against the
-// role stored in the database. Hiding a button is only tidiness -
-// somebody calling the API by hand still gets a 403. That's why
-// the owner-only controls are safe even though the page itself is
-// reachable by any moderator.
+// Every button here is backed by a check on the SERVER against
+// the person's titles. Hiding a control is only tidiness - a bad
+// actor calling the API by hand still gets a 403. So the
+// owner-only bits are safe to render for a moderator too, but
+// there's no point showing them.
 // ============================================================
 
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
-    Shield, Ban, CheckCircle2, Tag, Trash2, UserCog, AlertTriangle,
+    Shield, Ban, CheckCircle2, Tag, Trash2, UserCog, Search,
+    AlertTriangle, Globe, Plus, X,
 } from 'lucide-react';
 import {
-    AdminUser, PlayerBuild, Cookie, Role,
-    getAllUsers, getTopBuilds, getCookies, deleteBuild,
-    setUserTitle, setUserRole, setUserBanned,
+    StaffUser, PlayerBuild, Cookie, Title, IpBan,
+    getAllUsers, getBuilds, getCookies, deleteBuild,
+    lookupUser, addUserTitle, removeUserTitle, setUserBanned,
+    getIpBans, addIpBan, removeIpBan,
 } from '../api';
 import { Avatar } from '../components/Avatar';
-import { TitleBadge } from '../components/TitleBadge';
+import { TitleBadges } from '../components/TitleBadge';
 import { TeamRow } from '../components/TeamRow';
 import { useAuth } from '../auth';
 
+// ---- ban duration presets -----------------------------------
+// "How long should the ban last" - the user picks one of these,
+// or enters their own number of days. null minutes = permanent.
+const DURATIONS: { label: string; minutes: number | null }[] = [
+    { label: '1 hour',   minutes: 60 },
+    { label: '1 day',    minutes: 60 * 24 },
+    { label: '7 days',   minutes: 60 * 24 * 7 },
+    { label: '30 days',  minutes: 60 * 24 * 30 },
+    { label: 'Permanent', minutes: null },
+];
+
+// ---- title presets -----------------------------------------
+// The five presets carry fixed colours. Admins may award any of
+// the non-staff ones; owners may award all, plus custom titles.
+const PRESET_TITLES: (Title & { adminAssignable?: boolean })[] = [
+    { name: 'Owner',           color: '#000000' },
+    { name: 'Admin',           color: '#22D3EE' },
+    { name: 'Mod',             color: '#A78BFA', adminAssignable: true },
+    { name: 'OG',              color: '#F0C24A', adminAssignable: true },
+    { name: 'Content Creator', color: '#EF4444', adminAssignable: true },
+];
+
+
 export function AdminPage() {
     const { user, loading: authLoading } = useAuth();
-    const [tab, setTab] = useState<'users' | 'builds'>('users');
-    const [users, setUsers] = useState<AdminUser[]>([]);
+    const isOwner = user?.role === 'owner';
+    const isAdmin = user?.role === 'admin' || isOwner;
+    const isStaff = isAdmin || user?.role === 'mod';
+
+    const [tab, setTab] = useState<'accounts' | 'builds' | 'ip'>('accounts');
+    const [users, setUsers] = useState<StaffUser[]>([]);
     const [builds, setBuilds] = useState<PlayerBuild[]>([]);
     const [roster, setRoster] = useState<Cookie[]>([]);
+    const [ipBans, setIpBans] = useState<IpBan[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
-    const [busyId, setBusyId] = useState<number | null>(null);
-
-    const isOwner = user?.role === 'owner';
-    const isStaff = isOwner || user?.role === 'admin';
 
     useEffect(() => {
         if (authLoading) return;
         if (!isStaff) { setLoading(false); return; }
 
-        Promise.all([getAllUsers(), getTopBuilds(), getCookies()])
-            .then(([u, b, c]) => { setUsers(u); setBuilds(b); setRoster(c); })
+        // moderators can list accounts too (only for looking - they can't act)
+        Promise.all([
+            isAdmin ? getAllUsers() : Promise.resolve([]),
+            getBuilds('likes'),
+            getCookies(),
+            isOwner ? getIpBans() : Promise.resolve([]),
+        ])
+            .then(([u, b, c, ips]) => {
+                setUsers(u); setBuilds(b); setRoster(c); setIpBans(ips);
+            })
             .catch(err => setError(err.message))
             .finally(() => setLoading(false));
-    }, [authLoading, isStaff]);
+    }, [authLoading, isStaff, isAdmin, isOwner]);
 
-    // ---- actions ----
-    async function act<T>(id: number, run: () => Promise<T>, after: (result: T) => void) {
-        setBusyId(id); setError('');
-        try {
-            after(await run());
-        } catch (err) {
-            setError(err instanceof Error ? err.message : 'That did not work.');
-        } finally {
-            setBusyId(null);
-        }
-    }
-
-    function handleTitle(target: AdminUser) {
-        const next = window.prompt(
-            `Title for ${target.username} (blank to clear):`, target.title ?? '');
-        if (next === null) return;   // they cancelled
-        act(target.user_id,
-            () => setUserTitle(target.user_id, next.trim() || null),
-            res => setUsers(list => list.map(u =>
-                u.user_id === res.user_id ? { ...u, title: res.title } : u)));
-    }
-
-    function handleRole(target: AdminUser) {
-        const next: Role = target.role === 'admin' ? 'user' : 'admin';
-        const ok = window.confirm(next === 'admin'
-            ? `Make ${target.username} a moderator? They'll be able to delete any build.`
-            : `Remove ${target.username}'s moderator powers?`);
-        if (!ok) return;
-        act(target.user_id,
-            () => setUserRole(target.user_id, next as 'user' | 'admin'),
-            res => setUsers(list => list.map(u =>
-                u.user_id === res.user_id ? { ...u, role: res.role } : u)));
-    }
-
-    function handleBan(target: AdminUser) {
-        const banning = target.banned_at === null;
-        let reason = '';
-        if (banning) {
-            const entered = window.prompt(
-                `Ban ${target.username}? They keep their builds but can't log in.\n\nReason (optional):`, '');
-            if (entered === null) return;
-            reason = entered.trim();
-        } else if (!window.confirm(`Un-ban ${target.username}?`)) {
-            return;
-        }
-        act(target.user_id,
-            () => setUserBanned(target.user_id, banning, reason),
-            res => setUsers(list => list.map(u =>
-                u.user_id === res.user_id
-                    ? { ...u, banned_at: res.banned_at, ban_reason: res.ban_reason }
-                    : u)));
-    }
-
-    function handleDeleteBuild(build: PlayerBuild) {
-        const ok = window.confirm(
-            `Delete ${build.username}'s "${build.counter_team[0]} Comp" build? This can't be undone.`);
-        if (!ok) return;
-        act(build.build_id,
-            () => deleteBuild(build.build_id),
-            () => setBuilds(list => list.filter(b => b.build_id !== build.build_id)));
-    }
-
-    // ---- not allowed in here ----
     if (authLoading || loading) {
         return <div className="skeleton" style={{ height: 200 }} />;
     }
@@ -132,90 +104,75 @@ export function AdminPage() {
         );
     }
 
+    // rank string for the little badge next to the title
+    const rankLabel = isOwner ? 'Owner' : isAdmin ? 'Admin' : 'Mod';
+
+    // Rebuild an account row after a change (title change, ban…),
+    // so the list re-renders without a full refetch.
+    const updateUser = (updated: Partial<StaffUser> & { user_id: number }) =>
+        setUsers(list => list.map(u =>
+            u.user_id === updated.user_id ? { ...u, ...updated } : u));
+
     return (
         <div>
             <h1 style={{ marginBottom: 4, display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
                 <Shield size={26} aria-hidden="true" /> Admin panel
-                <TitleBadge title={isOwner ? 'Owner' : 'Moderator'} />
+                <span className="tag admin-tag">{rankLabel}</span>
             </h1>
             <p className="muted" style={{ marginBottom: 20 }}>
                 {isOwner
-                    ? 'You can moderate builds, award titles, ban accounts and appoint moderators.'
-                    : 'You can delete any community build. Titles and bans are the owner’s job.'}
+                    ? 'You can moderate builds, award any title (custom or preset), ban accounts, block IPs and appoint moderators.'
+                    : isAdmin
+                        ? 'You can moderate builds, award the Mod / OG / Content Creator titles, and ban accounts. Custom titles and IP bans are the owner\'s job.'
+                        : 'You can delete any community build. Titles and bans are the admin team\'s job.'}
             </p>
 
             <div style={{ display: 'flex', gap: 8, marginBottom: 22, flexWrap: 'wrap' }}>
-                <button className={'pill' + (tab === 'users' ? ' active' : '')} onClick={() => setTab('users')}>
-                    <UserCog size={15} aria-hidden="true" /> Accounts ({users.length})
+                <button className={'pill' + (tab === 'accounts' ? ' active' : '')} onClick={() => setTab('accounts')}>
+                    <UserCog size={15} aria-hidden="true" /> Accounts
+                    <span className="group-count">{users.length}</span>
                 </button>
                 <button className={'pill' + (tab === 'builds' ? ' active' : '')} onClick={() => setTab('builds')}>
-                    <Trash2 size={15} aria-hidden="true" /> Builds ({builds.length})
+                    <Trash2 size={15} aria-hidden="true" /> Builds
+                    <span className="group-count">{builds.length}</span>
                 </button>
+                {isOwner && (
+                    <button className={'pill' + (tab === 'ip' ? ' active' : '')} onClick={() => setTab('ip')}>
+                        <Globe size={15} aria-hidden="true" /> IP bans
+                        <span className="group-count">{ipBans.length}</span>
+                    </button>
+                )}
             </div>
 
             {error && <div className="error-box" role="alert" style={{ marginBottom: 16 }}>{error}</div>}
 
             {/* ---- ACCOUNTS ---- */}
-            {tab === 'users' && (
-                <div className="admin-list">
-                    {users.map(u => (
-                        <div key={u.user_id}
-                            className={'card admin-row' + (u.banned_at ? ' is-banned' : '')}>
-                            <Avatar who={u} username={u.username} size={42} />
+            {tab === 'accounts' && isAdmin && (
+                <>
+                    <ManageAccountForm
+                        onLookup={u => setUsers(list => {
+                            const other = list.filter(x => x.user_id !== u.user_id);
+                            // move it to the top so it's visible
+                            return [{ ...u, build_count: '0' } as StaffUser, ...other];
+                        })}
+                        onDone={updateUser}
+                        onError={setError}
+                        isOwner={isOwner}
+                    />
 
-                            <div className="admin-row-main">
-                                <div className="admin-row-name">
-                                    <Link to={`/u/${u.user_id}`} className="username-link">{u.username}</Link>
-                                    <span className="muted admin-id">#{u.user_id}</span>
-                                    <TitleBadge title={u.title} small />
-                                    {u.role !== 'user' && (
-                                        <span className="tag admin-tag">
-                                            <Shield size={11} aria-hidden="true" />
-                                            {u.role === 'owner' ? 'Owner' : 'Moderator'}
-                                        </span>
-                                    )}
-                                </div>
-                                <div className="muted" style={{ fontSize: 13 }}>
-                                    {u.build_count} build{u.build_count === '1' ? '' : 's'}
-                                    {u.banned_at && (
-                                        <span className="admin-ban-note">
-                                            <AlertTriangle size={12} aria-hidden="true" />
-                                            Banned{u.ban_reason ? ` — ${u.ban_reason}` : ''}
-                                        </span>
-                                    )}
-                                </div>
-                            </div>
-
-                            {/* Owner-only controls. An owner can't be
-                                demoted or banned, so those are hidden too. */}
-                            {isOwner && (
-                                <div className="admin-row-actions">
-                                    <button className="pill" disabled={busyId === u.user_id}
-                                        onClick={() => handleTitle(u)}>
-                                        <Tag size={14} aria-hidden="true" /> Title
-                                    </button>
-                                    {u.role !== 'owner' && (
-                                        <>
-                                            <button className="pill" disabled={busyId === u.user_id}
-                                                onClick={() => handleRole(u)}>
-                                                <Shield size={14} aria-hidden="true" />
-                                                {u.role === 'admin' ? 'Remove mod' : 'Make mod'}
-                                            </button>
-                                            <button
-                                                className={'pill' + (u.banned_at ? '' : ' danger')}
-                                                disabled={busyId === u.user_id}
-                                                onClick={() => handleBan(u)}>
-                                                {u.banned_at
-                                                    ? <><CheckCircle2 size={14} aria-hidden="true" /> Un-ban</>
-                                                    : <><Ban size={14} aria-hidden="true" /> Ban</>}
-                                            </button>
-                                        </>
-                                    )}
-                                </div>
-                            )}
-                        </div>
-                    ))}
-                </div>
+                    <div className="admin-list" style={{ marginTop: 22 }}>
+                        {users.map(u => (
+                            <AccountRow
+                                key={u.user_id}
+                                account={u}
+                                actingUserId={user!.userId}
+                                isOwner={isOwner}
+                                onUpdate={updateUser}
+                                onError={setError}
+                            />
+                        ))}
+                    </div>
+                </>
             )}
 
             {/* ---- BUILDS ---- */}
@@ -225,31 +182,499 @@ export function AdminPage() {
                         <div className="card"><p className="muted">There are no community builds yet.</p></div>
                     )}
                     {builds.map(b => (
-                        <div key={b.build_id} className="card">
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginBottom: 12 }}>
-                                <Avatar who={b} username={b.username} size={30} />
-                                <div style={{ flex: 1, minWidth: 140 }}>
-                                    <strong style={{ color: 'var(--color-text)' }}>{b.counter_team[0]} Comp</strong>
-                                    <div className="muted" style={{ fontSize: 13 }}>
-                                        by{' '}
-                                        <Link to={`/u/${b.user_id}`} className="username-link">{b.username}</Link>
-                                        {' · '}{b.likes} like{b.likes === 1 ? '' : 's'}
-                                    </div>
-                                </div>
-                                <button className="pill danger" disabled={busyId === b.build_id}
-                                    onClick={() => handleDeleteBuild(b)}>
-                                    <Trash2 size={14} aria-hidden="true" /> Delete
-                                </button>
-                            </div>
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                                <TeamRow label="VS." kind="enemy" cookieNames={b.opponent_team} allCookies={roster} />
-                                <TeamRow label="USE" kind="ally" cookieNames={b.counter_team} allCookies={roster} />
-                            </div>
-                            {b.note && <p className="build-card-note">{b.note}</p>}
-                        </div>
+                        <BuildAdminRow
+                            key={b.build_id}
+                            build={b}
+                            roster={roster}
+                            onDeleted={() => setBuilds(list => list.filter(x => x.build_id !== b.build_id))}
+                            onError={setError}
+                        />
                     ))}
                 </div>
             )}
+
+            {/* ---- IP BANS (owner only) ---- */}
+            {tab === 'ip' && isOwner && (
+                <IpBansPanel
+                    bans={ipBans}
+                    onAdd={ban => setIpBans(list => [ban, ...list.filter(b => b.ip !== ban.ip)])}
+                    onRemove={ip => setIpBans(list => list.filter(b => b.ip !== ip))}
+                    onError={setError}
+                />
+            )}
         </div>
+    );
+}
+
+
+// ============================================================
+// The "Manage account" form at the top of the Accounts tab.
+// Takes an id or username, looks it up, then offers the staff
+// controls straight away (award title / ban / etc.).
+// ============================================================
+function ManageAccountForm({ onLookup, onDone, onError, isOwner }: {
+    onLookup: (u: StaffUser) => void;
+    onDone: (u: Partial<StaffUser> & { user_id: number }) => void;
+    onError: (msg: string) => void;
+    isOwner: boolean;
+}) {
+    const [query, setQuery] = useState('');
+    const [found, setFound] = useState<StaffUser | null>(null);
+    const [busy, setBusy] = useState(false);
+
+    async function handleLookup() {
+        if (!query.trim()) return;
+        setBusy(true); onError('');
+        try {
+            const u = await lookupUser(query.trim());
+            setFound(u);
+            onLookup(u);
+        } catch (err) {
+            setFound(null);
+            onError(err instanceof Error ? err.message : 'Lookup failed.');
+        } finally { setBusy(false); }
+    }
+
+    return (
+        <div className="card admin-manage">
+            <h2 style={{ fontSize: 17, marginBottom: 10 }}>Manage account</h2>
+            <p className="muted" style={{ fontSize: 13, marginBottom: 12 }}>
+                Enter a user id (e.g. <code>7</code>) or a username to load their controls.
+            </p>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                <input
+                    className="input"
+                    style={{ flex: 1, minWidth: 200, maxWidth: 320 }}
+                    value={query}
+                    onChange={e => setQuery(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter') handleLookup(); }}
+                    placeholder="id or username"
+                />
+                <button className="btn-primary" disabled={busy} onClick={handleLookup}>
+                    <Search size={16} aria-hidden="true" /> Find
+                </button>
+            </div>
+
+            {found && (
+                <div style={{ marginTop: 18, paddingTop: 18, borderTop: '1px solid var(--color-border)' }}>
+                    <ManageAccountControls
+                        account={found}
+                        onUpdated={next => { setFound({ ...found, ...next }); onDone({ ...next, user_id: found.user_id }); }}
+                        onError={onError}
+                        isOwner={isOwner}
+                    />
+                </div>
+            )}
+        </div>
+    );
+}
+
+
+// ============================================================
+// One row in the Accounts list. A summary of the person, plus a
+// collapse-open button that reveals the same staff controls the
+// Manage form uses.
+// ============================================================
+function AccountRow({ account, actingUserId, isOwner, onUpdate, onError }: {
+    account: StaffUser;
+    actingUserId: number;
+    isOwner: boolean;
+    onUpdate: (u: Partial<StaffUser> & { user_id: number }) => void;
+    onError: (msg: string) => void;
+}) {
+    const [open, setOpen] = useState(false);
+    const isMe = account.user_id === actingUserId;
+    const isBanned = account.banned_at !== null
+        && (account.banned_until === null || new Date(account.banned_until) > new Date());
+
+    return (
+        <div className={'card admin-row' + (isBanned ? ' is-banned' : '')}>
+            <div className="admin-row-summary">
+                <Avatar who={account} username={account.username} size={42} />
+                <div className="admin-row-main">
+                    <div className="admin-row-name">
+                        <Link to={`/u/${account.user_id}`} className="username-link">{account.username}</Link>
+                        <span className="muted admin-id">#{account.user_id}</span>
+                        <TitleBadges titles={account.titles} small />
+                    </div>
+                    <div className="muted" style={{ fontSize: 13 }}>
+                        {account.build_count} build{account.build_count === '1' ? '' : 's'}
+                        {account.last_ip && <> · last IP <code>{account.last_ip}</code></>}
+                        {isBanned && (
+                            <span className="admin-ban-note">
+                                <AlertTriangle size={12} aria-hidden="true" />
+                                Banned{account.ban_reason ? ` — ${account.ban_reason}` : ''}
+                                {account.banned_until && <> until {new Date(account.banned_until).toLocaleDateString('en-AU')}</>}
+                            </span>
+                        )}
+                    </div>
+                </div>
+                {!isMe && (
+                    <button className="pill" onClick={() => setOpen(v => !v)}>
+                        {open ? <><X size={14} aria-hidden="true" /> Close</>
+                              : <><UserCog size={14} aria-hidden="true" /> Manage</>}
+                    </button>
+                )}
+            </div>
+
+            {open && !isMe && (
+                <div style={{ marginTop: 14, paddingTop: 14, borderTop: '1px solid var(--color-border)' }}>
+                    <ManageAccountControls
+                        account={account}
+                        onUpdated={next => onUpdate({ ...next, user_id: account.user_id })}
+                        onError={onError}
+                        isOwner={isOwner}
+                    />
+                </div>
+            )}
+        </div>
+    );
+}
+
+
+// ============================================================
+// The actual staff controls: award/remove titles, ban / un-ban.
+// Shared between the "Manage account" form (accepts id/name) and
+// the collapse under each row in the list.
+// ============================================================
+function ManageAccountControls({ account, onUpdated, onError, isOwner }: {
+    account: StaffUser;
+    onUpdated: (patch: Partial<StaffUser>) => void;
+    onError: (msg: string) => void;
+    isOwner: boolean;
+}) {
+    const [busy, setBusy] = useState(false);
+    const isBanned = account.banned_at !== null
+        && (account.banned_until === null || new Date(account.banned_until) > new Date());
+
+    // ---- title picker ----
+    const [customName, setCustomName] = useState('');
+    const [customColor, setCustomColor] = useState('#8B7CF6');
+
+    async function addTitle(name: string, color: string) {
+        setBusy(true); onError('');
+        try {
+            const res = await addUserTitle(account.user_id, name, color);
+            onUpdated({ titles: res.titles });
+        } catch (err) {
+            onError(err instanceof Error ? err.message : "Couldn't award that title.");
+        } finally { setBusy(false); }
+    }
+
+    async function removeTitle(name: string) {
+        setBusy(true); onError('');
+        try {
+            const res = await removeUserTitle(account.user_id, name);
+            onUpdated({ titles: res.titles });
+        } catch (err) {
+            onError(err instanceof Error ? err.message : "Couldn't remove that title.");
+        } finally { setBusy(false); }
+    }
+
+    // ---- ban form ----
+    const [banReason, setBanReason] = useState('');
+    const [banMinutes, setBanMinutes] = useState<number | null>(60 * 24);
+    const [customDays, setCustomDays] = useState('');
+    const [ipBan, setIpBan] = useState(false);
+
+    async function submitBan(banning: boolean) {
+        setBusy(true); onError('');
+        try {
+            // Custom days overrides the preset if a valid number is typed.
+            const days = customDays.trim() ? Number(customDays.trim()) : NaN;
+            const minutes = Number.isFinite(days) && days > 0 ? days * 24 * 60 : banMinutes;
+
+            const res = await setUserBanned(account.user_id, {
+                banned: banning,
+                reason: banning ? banReason : undefined,
+                minutes: banning ? minutes : null,
+                ipBan: banning && ipBan,
+            });
+            onUpdated({
+                banned_at: res.banned_at,
+                banned_until: res.banned_until,
+                ban_reason: res.ban_reason,
+            });
+            if (res.ipMessage) onError(res.ipMessage);
+        } catch (err) {
+            onError(err instanceof Error ? err.message : "Couldn't do that.");
+        } finally { setBusy(false); }
+    }
+
+    return (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+            {/* ---- CURRENT TITLES ---- */}
+            <div>
+                <div className="field-label" style={{ marginBottom: 6 }}>Current titles</div>
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                    {account.titles.length === 0 && <span className="muted">None</span>}
+                    {account.titles.map(t => (
+                        <span key={t.name} className="admin-title-chip"
+                              style={{ color: t.color, borderColor: t.color }}>
+                            {t.name}
+                            <button
+                                className="admin-title-chip-remove"
+                                aria-label={`Remove ${t.name}`}
+                                onClick={() => removeTitle(t.name)}
+                                disabled={busy}
+                            >
+                                <X size={12} />
+                            </button>
+                        </span>
+                    ))}
+                </div>
+            </div>
+
+            {/* ---- ADD A TITLE ---- */}
+            <div>
+                <div className="field-label" style={{ marginBottom: 6 }}>Add a preset title</div>
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                    {PRESET_TITLES.map(preset => {
+                        // admins may only award the non-staff presets
+                        const allowed = isOwner || preset.adminAssignable === true;
+                        return (
+                            <button
+                                key={preset.name}
+                                className="admin-title-preset"
+                                style={{ color: preset.color, borderColor: preset.color, opacity: allowed ? 1 : 0.35 }}
+                                disabled={!allowed || busy}
+                                onClick={() => addTitle(preset.name, preset.color)}
+                                title={allowed ? `Award ${preset.name}` : 'Owner only'}
+                            >
+                                {preset.name}
+                            </button>
+                        );
+                    })}
+                </div>
+
+                {isOwner && (
+                    <div style={{ marginTop: 12 }}>
+                        <div className="field-label" style={{ marginBottom: 6 }}>Or a custom title (owner only)</div>
+                        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+                            <input
+                                type="color"
+                                className="theme-swatch"
+                                aria-label="Title colour"
+                                value={customColor}
+                                onChange={e => setCustomColor(e.target.value)}
+                            />
+                            <input
+                                className="input"
+                                style={{ maxWidth: 220 }}
+                                value={customName}
+                                maxLength={20}
+                                onChange={e => setCustomName(e.target.value)}
+                                placeholder="Title name"
+                            />
+                            <button className="pill" disabled={busy || !customName.trim()}
+                                onClick={() => { addTitle(customName.trim(), customColor); setCustomName(''); }}>
+                                <Plus size={13} aria-hidden="true" /> Add
+                            </button>
+                        </div>
+                    </div>
+                )}
+            </div>
+
+            {/* ---- BAN ---- */}
+            <div>
+                <div className="field-label" style={{ marginBottom: 6 }}>
+                    Ban {isBanned && <span className="muted">— currently banned</span>}
+                </div>
+                {!isBanned && (
+                    <>
+                        <input
+                            className="input"
+                            style={{ maxWidth: 420, marginBottom: 8 }}
+                            value={banReason}
+                            maxLength={200}
+                            placeholder="Reason (optional)"
+                            onChange={e => setBanReason(e.target.value)}
+                        />
+                        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 8 }}>
+                            {DURATIONS.map(d => (
+                                <button key={d.label}
+                                    className={'pill' + (banMinutes === d.minutes && !customDays ? ' active' : '')}
+                                    onClick={() => { setBanMinutes(d.minutes); setCustomDays(''); }}>
+                                    {d.label}
+                                </button>
+                            ))}
+                            <input
+                                className="input"
+                                type="number"
+                                min={1}
+                                style={{ width: 120 }}
+                                value={customDays}
+                                placeholder="Custom (days)"
+                                onChange={e => setCustomDays(e.target.value)}
+                            />
+                        </div>
+                        {isOwner && (
+                            <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14, marginBottom: 10 }}>
+                                <input type="checkbox" checked={ipBan}
+                                    onChange={e => setIpBan(e.target.checked)} />
+                                Also block the last IP they logged in from
+                                {account.last_ip && <code>({account.last_ip})</code>}
+                            </label>
+                        )}
+                        <button className="pill danger" disabled={busy} onClick={() => submitBan(true)}>
+                            <Ban size={14} aria-hidden="true" /> Ban this account
+                        </button>
+                    </>
+                )}
+                {isBanned && (
+                    <button className="pill" disabled={busy} onClick={() => submitBan(false)}>
+                        <CheckCircle2 size={14} aria-hidden="true" /> Un-ban
+                    </button>
+                )}
+            </div>
+        </div>
+    );
+}
+
+
+// ============================================================
+// One community build in the Builds tab. Any moderator (or above)
+// can remove it.
+// ============================================================
+function BuildAdminRow({ build, roster, onDeleted, onError }: {
+    build: PlayerBuild;
+    roster: Cookie[];
+    onDeleted: () => void;
+    onError: (msg: string) => void;
+}) {
+    const [busy, setBusy] = useState(false);
+
+    async function handleDelete() {
+        const ok = window.confirm(
+            `Delete ${build.username}'s "${build.counter_team[0]} Comp" build? This can't be undone.`);
+        if (!ok) return;
+        setBusy(true); onError('');
+        try {
+            await deleteBuild(build.build_id);
+            onDeleted();
+        } catch (err) {
+            onError(err instanceof Error ? err.message : "Couldn't delete.");
+        } finally { setBusy(false); }
+    }
+
+    return (
+        <div className="card">
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginBottom: 12 }}>
+                <Avatar who={build} username={build.username} size={30} />
+                <div style={{ flex: 1, minWidth: 140 }}>
+                    <strong style={{ color: 'var(--color-text)' }}>{build.counter_team[0]} Comp</strong>
+                    <div className="muted" style={{ fontSize: 13 }}>
+                        by <Link to={`/u/${build.user_id}`} className="username-link">{build.username}</Link>
+                        {' · '}{build.likes} like{build.likes === 1 ? '' : 's'}
+                    </div>
+                </div>
+                <button className="pill danger" disabled={busy} onClick={handleDelete}>
+                    <Trash2 size={14} aria-hidden="true" /> Delete
+                </button>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <TeamRow label="VS." kind="enemy" cookieNames={build.opponent_team} allCookies={roster} />
+                <TeamRow label="USE" kind="ally" cookieNames={build.counter_team} allCookies={roster} />
+            </div>
+            {build.note && <p className="build-card-note">{build.note}</p>}
+        </div>
+    );
+}
+
+
+// ============================================================
+// The IP-bans tab. Owner-only.
+// ============================================================
+function IpBansPanel({ bans, onAdd, onRemove, onError }: {
+    bans: IpBan[];
+    onAdd: (b: IpBan) => void;
+    onRemove: (ip: string) => void;
+    onError: (msg: string) => void;
+}) {
+    const [ip, setIp] = useState('');
+    const [reason, setReason] = useState('');
+    const [minutes, setMinutes] = useState<number | null>(60 * 24 * 7);
+    const [customDays, setCustomDays] = useState('');
+    const [busy, setBusy] = useState(false);
+
+    async function submit() {
+        setBusy(true); onError('');
+        try {
+            const days = customDays.trim() ? Number(customDays.trim()) : NaN;
+            const dur = Number.isFinite(days) && days > 0 ? days * 24 * 60 : minutes;
+            const b = await addIpBan(ip.trim(), reason || undefined, dur);
+            onAdd(b);
+            setIp(''); setReason('');
+        } catch (err) {
+            onError(err instanceof Error ? err.message : "Couldn't ban that IP.");
+        } finally { setBusy(false); }
+    }
+
+    async function remove(target: string) {
+        if (!window.confirm(`Un-ban ${target}?`)) return;
+        try {
+            await removeIpBan(target);
+            onRemove(target);
+        } catch (err) {
+            onError(err instanceof Error ? err.message : "Couldn't un-ban.");
+        }
+    }
+
+    return (
+        <>
+            <div className="card">
+                <h2 style={{ fontSize: 17, marginBottom: 10 }}>Ban an IP</h2>
+                <p className="muted" style={{ fontSize: 13, marginBottom: 12 }}>
+                    Blocks any account trying to log in from this address, until the ban expires.
+                </p>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 8 }}>
+                    <input className="input" style={{ maxWidth: 220 }} value={ip}
+                        onChange={e => setIp(e.target.value)} placeholder="e.g. 203.0.113.42" />
+                    <input className="input" style={{ flex: 1, minWidth: 200 }} value={reason}
+                        onChange={e => setReason(e.target.value)} placeholder="Reason (optional)" />
+                </div>
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 8 }}>
+                    {DURATIONS.map(d => (
+                        <button key={d.label}
+                            className={'pill' + (minutes === d.minutes && !customDays ? ' active' : '')}
+                            onClick={() => { setMinutes(d.minutes); setCustomDays(''); }}>
+                            {d.label}
+                        </button>
+                    ))}
+                    <input className="input" type="number" min={1} style={{ width: 120 }}
+                        value={customDays} placeholder="Custom (days)"
+                        onChange={e => setCustomDays(e.target.value)} />
+                </div>
+                <button className="pill danger" disabled={busy || !ip.trim()} onClick={submit}>
+                    <Ban size={14} aria-hidden="true" /> Add IP ban
+                </button>
+            </div>
+
+            <div className="admin-list" style={{ marginTop: 16 }}>
+                {bans.length === 0 && (
+                    <div className="card"><p className="muted">No active IP bans.</p></div>
+                )}
+                {bans.map(b => (
+                    <div key={b.ip} className="card admin-row">
+                        <Globe size={20} aria-hidden="true" style={{ color: 'var(--color-danger)' }} />
+                        <div className="admin-row-main">
+                            <div className="admin-row-name">
+                                <code>{b.ip}</code>
+                                {b.reason && <span className="muted">— {b.reason}</span>}
+                            </div>
+                            <div className="muted" style={{ fontSize: 13 }}>
+                                Since {new Date(b.banned_at).toLocaleDateString('en-AU')}
+                                {b.banned_until
+                                    ? ` · lifts ${new Date(b.banned_until).toLocaleString('en-AU')}`
+                                    : ' · permanent'}
+                            </div>
+                        </div>
+                        <button className="pill" onClick={() => remove(b.ip)}>
+                            <CheckCircle2 size={14} aria-hidden="true" /> Un-ban
+                        </button>
+                    </div>
+                ))}
+            </div>
+        </>
     );
 }

@@ -17,10 +17,20 @@ import { authRouter } from './routes/auth';
 import { buildsRouter } from './routes/builds';
 import { usersRouter } from './routes/users';
 import { followsRouter } from './routes/follows';
+import { ipBansRouter } from './routes/ipBans';
 
 dotenv.config();
 
 const app = express();
+
+// The API is deployed behind Render's proxy, so req.ip comes back
+// as the proxy's address unless we opt in to trusting the
+// X-Forwarded-For header. That header is what actually carries
+// the real client IP - needed for IP bans and last_ip tracking.
+// "1" = trust exactly one proxy hop (Render's), which is the safe
+// setting; blindly trusting all hops would let anyone spoof the
+// header.
+app.set('trust proxy', 1);
 const PORT = Number(process.env.PORT) || 4000;
 
 // ---- Middleware (runs before every route) ----
@@ -39,6 +49,7 @@ app.use('/api/auth', authRouter);
 app.use('/api/builds', buildsRouter);
 app.use('/api/users', usersRouter);
 app.use('/api/follows', followsRouter);
+app.use('/api/ip-bans', ipBansRouter);
 
 // the game art, served as normal static files:
 //   GET /images/cookies/gingerbrave.png        (190 cookie portraits)

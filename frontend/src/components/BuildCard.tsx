@@ -10,12 +10,12 @@
 // is how other people's profiles hide them.
 // ============================================================
 
-import { Heart, Eye, EyeOff, Trash2 } from 'lucide-react';
+import { Heart, Eye, EyeOff, Trash2, BarChart2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { Cookie, PlayerBuild } from '../api';
 import { TeamRow } from './TeamRow';
 import { Avatar } from './Avatar';
-import { TitleBadge } from './TitleBadge';
+import { TitleBadges } from './TitleBadge';
 
 interface Props {
     build: PlayerBuild;
@@ -55,6 +55,12 @@ export function BuildCard({
                     </span>
                 )}
 
+                {typeof build.views === 'number' && build.views > 0 && (
+                    <span className="build-views" title={`${build.views} views`}>
+                        <BarChart2 size={14} aria-hidden="true" /> {build.views}
+                    </span>
+                )}
+
                 {onLike && (
                     // stopPropagation everywhere below: without it, clicking
                     // a button would ALSO open the details popup
@@ -79,7 +85,7 @@ export function BuildCard({
                 >
                     {build.username}
                 </Link>
-                <TitleBadge title={build.title} small />
+                <TitleBadges titles={build.titles} small />
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>

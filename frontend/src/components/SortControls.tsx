@@ -34,15 +34,14 @@ export function SortControls({ field, ascending, onFieldChange, onToggleDirectio
             </select>
 
             <button
-                className="sort-direction"
+                className="sort-direction icon-only"
                 onClick={onToggleDirection}
-                title={ascending ? 'Ascending — click for descending' : 'Descending — click for ascending'}
-                aria-label={`Sorting ${ascending ? 'ascending' : 'descending'}, click to reverse`}
+                title={directionLabel(field, ascending) + ' (click to reverse)'}
+                aria-label={`Sorting ${directionLabel(field, ascending)}, click to reverse`}
             >
                 {ascending
-                    ? <ArrowUpNarrowWide size={16} aria-hidden="true" />
-                    : <ArrowDownWideNarrow size={16} aria-hidden="true" />}
-                <span>{directionLabel(field, ascending)}</span>
+                    ? <ArrowUpNarrowWide size={18} aria-hidden="true" />
+                    : <ArrowDownWideNarrow size={18} aria-hidden="true" />}
             </button>
         </div>
     );

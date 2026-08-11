@@ -34,7 +34,7 @@ export function CookiePicker({
     const [search, setSearch] = useState('');
     // default = rarity, ascending (Common -> highest rarity)
     const [sortField, setSortField] = useState<SortField>('rarity');
-    const [ascending, setAscending] = useState(true);
+    const [ascending, setAscending] = useState(false);  // default = highest first
 
     const selected = roster.find(c => c.name === selectedName);
 
