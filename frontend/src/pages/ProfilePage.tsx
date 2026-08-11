@@ -18,16 +18,28 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { Heart, Gem, Pencil, Check, Upload, Trash2, Shield } from 'lucide-react';
+import {
+    Heart, Gem, Pencil, Check, Upload, Trash2, Shield,
+    UserPlus, UserCheck, Clock, Tag,
+} from 'lucide-react';
 import {
     Cookie, PlayerBuild, Profile, avatarUrl,
     getCookies, getProfile, setBuildPrivacy, deleteBuild,
+    toggleFollow, setUserTitle,
 } from '../api';
 import { BuildCard } from '../components/BuildCard';
 import { BuildDetail } from '../components/BuildDetail';
 import { CookiePicker } from '../components/CookiePicker';
+import { FollowListModal } from '../components/FollowListModal';
+import { TitleBadge } from '../components/TitleBadge';
 import { fileToAvatarDataUri } from '../avatarUpload';
 import { useAuth } from '../auth';
+
+// how a cooldown date is written out, e.g. "14 August 2026"
+function formatDate(iso: string): string {
+    return new Date(iso).toLocaleDateString('en-AU',
+        { day: 'numeric', month: 'long', year: 'numeric' });
+}
 
 export function ProfilePage() {
     const { username = '' } = useParams();
@@ -171,15 +183,26 @@ function ProfileHeader({ profile, roster, onSaved, saveProfile }: {
     saveProfile: ReturnType<typeof useAuth>['saveProfile'];
 }) {
     const navigate = useNavigate();
+    const { user } = useAuth();
     const [editingName, setEditingName] = useState(false);
     const [name, setName] = useState(profile.username);
     const [pickingCookie, setPickingCookie] = useState(false);
     const [busy, setBusy] = useState(false);
     const [message, setMessage] = useState('');
     const [problem, setProblem] = useState('');
+    // which follow list popup is open, if any
+    const [showList, setShowList] = useState<'followers' | 'following' | null>(null);
+    // the admin's title box
+    const [editingTitle, setEditingTitle] = useState(false);
+    const [titleDraft, setTitleDraft] = useState(profile.title ?? '');
     const fileInput = useRef<HTMLInputElement>(null);
 
     const picture = avatarUrl(profile);
+
+    // The rename cooldown comes from the logged-in user's own record,
+    // so it only ever applies to your own profile. null = you can
+    // rename right now.
+    const renameBlockedUntil = profile.isMe ? (user?.usernameChangeableAt ?? null) : null;
 
     // small wrapper so every save handles errors the same way
     async function save(changes: Parameters<typeof saveProfile>[0], done: string) {
@@ -214,6 +237,35 @@ function ProfileHeader({ profile, roster, onSaved, saveProfile }: {
             // and show "That player could not be found".
             // replace: true so Back doesn't return to the dead name.
             navigate(`/u/${encodeURIComponent(trimmed)}`, { replace: true });
+        }
+    }
+
+    // ---- follow / unfollow ----
+    async function handleFollow() {
+        if (!user) { setProblem('Log in to follow other players.'); return; }
+        setBusy(true); setProblem('');
+        try {
+            const res = await toggleFollow(profile.username);
+            onSaved({ followedByMe: res.following, followers: res.followers });
+        } catch (err) {
+            setProblem(err instanceof Error ? err.message : 'Could not do that.');
+        } finally {
+            setBusy(false);
+        }
+    }
+
+    // ---- award / clear a title (admins only) ----
+    async function handleTitle() {
+        setBusy(true); setProblem(''); setMessage('');
+        try {
+            const res = await setUserTitle(profile.username, titleDraft.trim() || null);
+            onSaved({ title: res.title });
+            setEditingTitle(false);
+            setMessage(res.title ? `Title set to "${res.title}".` : 'Title cleared.');
+        } catch (err) {
+            setProblem(err instanceof Error ? err.message : 'Could not set that title.');
+        } finally {
+            setBusy(false);
         }
     }
 
@@ -299,24 +351,54 @@ function ProfileHeader({ profile, roster, onSaved, saveProfile }: {
                         </div>
                     </div>
                 ) : (
-                    <h1 className="profile-name">
-                        {profile.username}
+                    <div className="profile-name-row">
+                        <h1 className="profile-name">{profile.username}</h1>
+                        <TitleBadge title={profile.title} />
                         {profile.isAdmin && (
                             <span className="tag admin-tag" title="Site admin">
                                 <Shield size={12} aria-hidden="true" /> Admin
                             </span>
                         )}
+                        {/* Renaming is limited to once every 3 days, because
+                            a profile lives at /u/<name> and renaming breaks
+                            every link anyone has to it. */}
                         {profile.isMe && (
-                            <button className="link-button" onClick={() => setEditingName(true)}>
-                                <Pencil size={14} aria-hidden="true" /> Change
-                            </button>
+                            renameBlockedUntil
+                                ? <span className="rename-locked" title="Usernames can only change every 3 days">
+                                    <Clock size={13} aria-hidden="true" />
+                                    Rename available {formatDate(renameBlockedUntil)}
+                                  </span>
+                                : <button className="profile-edit-button" onClick={() => setEditingName(true)}>
+                                    <Pencil size={13} aria-hidden="true" /> Change
+                                  </button>
                         )}
-                    </h1>
+                    </div>
                 )}
 
                 <p className="muted" style={{ marginTop: 4 }}>Joined {joined}</p>
 
+                {/* ---- follow button (not on your own profile) ---- */}
+                {!profile.isMe && (
+                    <button
+                        className={'follow-button' + (profile.followedByMe ? ' following' : '')}
+                        onClick={handleFollow}
+                        disabled={busy}
+                        title={user ? undefined : 'Log in to follow'}
+                    >
+                        {profile.followedByMe
+                            ? <><UserCheck size={16} aria-hidden="true" /> Following</>
+                            : <><UserPlus size={16} aria-hidden="true" /> Follow</>}
+                    </button>
+                )}
+
                 <div className="profile-stats">
+                    {/* the follow counts open a list of those people */}
+                    <button className="profile-stat clickable" onClick={() => setShowList('followers')}>
+                        <strong>{profile.followers}</strong> follower{profile.followers === 1 ? '' : 's'}
+                    </button>
+                    <button className="profile-stat clickable" onClick={() => setShowList('following')}>
+                        <strong>{profile.following}</strong> following
+                    </button>
                     <span className="profile-stat">
                         <Gem size={16} aria-hidden="true" />
                         <strong>{profile.buildCount}</strong> public build{profile.buildCount === 1 ? '' : 's'}
@@ -327,9 +409,66 @@ function ProfileHeader({ profile, roster, onSaved, saveProfile }: {
                     </span>
                 </div>
 
+                {/* ---- admin-only: award a title ----
+                    This only HIDES the control from everyone else.
+                    The real protection is on the backend, which checks
+                    the admin flag in the database and returns 403. */}
+                {profile.viewerIsAdmin && (
+                    <div className="title-admin">
+                        {editingTitle ? (
+                            <div className="title-admin-edit">
+                                <label htmlFor="profile-title" className="field-label">
+                                    Title for {profile.username}
+                                </label>
+                                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+                                    <input
+                                        id="profile-title"
+                                        className="input"
+                                        style={{ maxWidth: 200 }}
+                                        value={titleDraft}
+                                        maxLength={20}
+                                        placeholder="e.g. OG"
+                                        autoFocus
+                                        onChange={e => setTitleDraft(e.target.value)}
+                                        onKeyDown={e => { if (e.key === 'Enter') handleTitle(); }}
+                                    />
+                                    <button className="btn-primary" onClick={handleTitle} disabled={busy}>
+                                        <Check size={16} aria-hidden="true" /> Save
+                                    </button>
+                                    <button className="btn-ghost" disabled={busy}
+                                        onClick={() => { setTitleDraft(profile.title ?? ''); setEditingTitle(false); }}>
+                                        Cancel
+                                    </button>
+                                </div>
+                                {/* quick picks, so common titles are one click */}
+                                <div className="title-presets">
+                                    {['Owner', 'Admin', 'Mod', 'OG', 'Veteran', 'Legend'].map(t => (
+                                        <button key={t} className="pill" onClick={() => setTitleDraft(t)}>{t}</button>
+                                    ))}
+                                    <button className="pill danger" onClick={() => setTitleDraft('')}>Clear</button>
+                                </div>
+                            </div>
+                        ) : (
+                            <button className="pill" onClick={() => setEditingTitle(true)}>
+                                <Tag size={14} aria-hidden="true" />
+                                {profile.title ? 'Change title' : 'Give a title'}
+                            </button>
+                        )}
+                    </div>
+                )}
+
                 {message && <p className="profile-message">{message}</p>}
                 {problem && <div className="error-box" role="alert" style={{ marginTop: 12 }}>{problem}</div>}
             </div>
+
+            {/* the followers / following list popup */}
+            {showList && (
+                <FollowListModal
+                    username={profile.username}
+                    kind={showList}
+                    onClose={() => setShowList(null)}
+                />
+            )}
 
             {/* choosing a cookie portrait re-uses the roster picker */}
             {pickingCookie && (

@@ -33,7 +33,7 @@ async function markLiked(builds: { build_id: number; likedByMe?: boolean }[], us
 buildsRouter.get('/top', optionalAuth, async (req: Request, res: Response) => {
     try {
         const result = await query(
-            `SELECT b.build_id, u.username, u.avatar, u.avatar_data, b.opponent_team, b.counter_team,
+            `SELECT b.build_id, u.username, u.avatar, u.avatar_data, u.title, b.opponent_team, b.counter_team,
                     b.gear_setup, b.note, b.likes, b.is_public, b.created_at
              FROM user_builds b
              JOIN users u ON u.user_id = b.user_id

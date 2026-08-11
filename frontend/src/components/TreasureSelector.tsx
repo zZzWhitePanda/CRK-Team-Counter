@@ -66,6 +66,10 @@ export function TreasureSelector({ treasures, onChange }: Props) {
                                 value={search} onChange={e => setSearch(e.target.value)} autoFocus />
                         </div>
 
+                        {/* picker-scroll is what makes the list scroll INSIDE
+                            the popup - without it the 45 treasures spill out
+                            past the bottom of the card */}
+                        <div className="picker-scroll">
                         <div className="picker-grid">
                             {filtered.map(t => {
                                 const taken = treasures.includes(t.key) && treasures[picking] !== t.key;
@@ -82,6 +86,7 @@ export function TreasureSelector({ treasures, onChange }: Props) {
                             {filtered.length === 0 && (
                                 <p className="muted" style={{ gridColumn: '1 / -1' }}>No treasures match “{search}”.</p>
                             )}
+                        </div>
                         </div>
                     </div>
                 </div>

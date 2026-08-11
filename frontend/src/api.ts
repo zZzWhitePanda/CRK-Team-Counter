@@ -50,6 +50,7 @@ export interface PlayerBuild {
     username: string;
     avatar?: string | null;        // the author's cookie-portrait avatar
     avatar_data?: string | null;   // or their uploaded picture
+    title?: string | null;         // their admin-awarded badge
     opponent_team: string[];
     counter_team: string[];
     // gear_setup holds the whole rich build (toppings, beascuits,
@@ -76,6 +77,11 @@ export interface AuthUser {
     isAdmin: boolean;
     avatar: string | null;       // a cookie portrait filename
     avatarData: string | null;   // or an uploaded picture, as a data URI
+    title: string | null;        // admin-awarded badge ('OG', 'Owner'…)
+    // when they may next change their username; null = right now.
+    // A profile lives at /u/<name>, so renaming breaks old links -
+    // hence the cooldown.
+    usernameChangeableAt: string | null;
 }
 
 // someone's public profile (anyone can view anyone's)
@@ -84,11 +90,24 @@ export interface Profile {
     username: string;
     avatar: string | null;
     avatarData: string | null;
+    title: string | null;
     isAdmin: boolean;
     createdAt: string;
     isMe: boolean;         // true when you're looking at your own profile
     buildCount: number;
     totalLikes: number;
+    followers: number;
+    following: number;
+    followedByMe: boolean;
+    viewerIsAdmin: boolean;   // can the person LOOKING award a title?
+}
+
+// one entry in a followers / following list
+export interface FollowUser {
+    username: string;
+    avatar: string | null;
+    avatar_data: string | null;
+    title: string | null;
 }
 
 // ---- helper: fetch + throw a readable error if it failed ------
@@ -220,6 +239,38 @@ export function setBuildPrivacy(buildId: number, isPublic: boolean) {
 // DELETE /api/builds/:id - remove one of your own builds
 export function deleteBuild(buildId: number) {
     return getJson<{ deleted: number }>(`/api/builds/${buildId}`, { method: 'DELETE' });
+}
+
+// ---- following ------------------------------------------------
+
+// POST /api/follows/:username - follow or unfollow (a toggle,
+// the same way the like button works)
+export function toggleFollow(username: string) {
+    return postJson<{ username: string; following: boolean; followers: number }>(
+        '/api/follows/' + encodeURIComponent(username), {});
+}
+
+// GET /api/follows/:username/followers - who follows them
+export function getFollowers(username: string) {
+    return getJson<{ username: string; users: FollowUser[] }>(
+        `/api/follows/${encodeURIComponent(username)}/followers`);
+}
+
+// GET /api/follows/:username/following - who they follow
+export function getFollowing(username: string) {
+    return getJson<{ username: string; users: FollowUser[] }>(
+        `/api/follows/${encodeURIComponent(username)}/following`);
+}
+
+// ---- titles (admin only) --------------------------------------
+
+// PATCH /api/users/:username/title - award or clear someone's badge.
+// The backend checks the admin flag in the database, so this failing
+// with 403 for a normal player is the real protection; hiding the
+// button is only for tidiness.
+export function setUserTitle(username: string, title: string | null) {
+    return patchJson<{ username: string; title: string | null }>(
+        `/api/users/${encodeURIComponent(username)}/title`, { title });
 }
 
 // ---- picture helpers ------------------------------------------

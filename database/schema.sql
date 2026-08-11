@@ -46,6 +46,13 @@ CREATE TABLE users (
     -- TEXT (not VARCHAR(n)) because the length varies; the backend
     -- rejects anything over 200 KB.
     avatar_data   TEXT,
+    -- a badge next to their name ('OG', 'Owner', …). Only an admin
+    -- can set this, so players can't award themselves one.
+    title         VARCHAR(20),
+    -- when the username was last changed. A profile lives at
+    -- /u/<username>, so every rename breaks the old link - the
+    -- backend uses this to allow only one change every 3 days.
+    username_changed_at TIMESTAMP,
     created_at    TIMESTAMP DEFAULT NOW()
 );
 
@@ -175,6 +182,25 @@ CREATE TABLE build_likes (
 
 
 -- ------------------------------------------------------------
+-- follows
+-- One row per "A follows B". Two rules are enforced by the
+-- DATABASE rather than only in code:
+--   * UNIQUE (follower_id, following_id) stops the same person
+--     being followed twice (same idea as build_likes).
+--   * no_self_follow stops you following yourself.
+-- ------------------------------------------------------------
+CREATE TABLE follows (
+    follow_id    SERIAL PRIMARY KEY,
+    follower_id  INTEGER NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+    following_id INTEGER NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+    followed_at  TIMESTAMP DEFAULT NOW(),
+
+    CONSTRAINT one_follow_per_pair UNIQUE (follower_id, following_id),
+    CONSTRAINT no_self_follow CHECK (follower_id <> following_id)
+);
+
+
+-- ------------------------------------------------------------
 -- Indexes (NFR02 + NFR08: keep lookups fast as the data grows)
 --
 -- GIN indexes are the special index type Postgres uses for
@@ -186,3 +212,8 @@ CREATE TABLE build_likes (
 CREATE INDEX idx_meta_teams_counters   ON meta_teams  USING GIN (counters);
 CREATE INDEX idx_user_builds_opponent  ON user_builds USING GIN (opponent_team);
 CREATE INDEX idx_user_builds_likes     ON user_builds (likes DESC);
+
+-- "how many followers does B have" and "who does A follow" are
+-- asked on every profile page, so both columns get an index.
+CREATE INDEX idx_follows_following     ON follows (following_id);
+CREATE INDEX idx_follows_follower      ON follows (follower_id);

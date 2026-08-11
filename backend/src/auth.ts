@@ -15,6 +15,7 @@
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { Request, Response, NextFunction } from 'express';
+import { query } from './db';
 
 // the secret used to sign tokens. In production it's set as an
 // environment variable; the fallback is only for local dev.
@@ -86,4 +87,36 @@ export function requireAuth(req: Request, res: Response, next: NextFunction) {
     }
     req.user = payload;
     next();
+}
+
+// requireAdmin: block the request unless the logged-in user is an
+// admin. Used for the one admin-only action, setting someone's
+// profile title.
+//
+// It deliberately re-reads is_admin FROM THE DATABASE instead of
+// trusting the isAdmin inside the token. A token is issued at login
+// and then never changes, so a token made before someone was made
+// an admin would say false (and one made before admin was REMOVED
+// would still say true). The database is the truth.
+export async function requireAdmin(req: Request, res: Response, next: NextFunction) {
+    const payload = readToken(req);
+    if (!payload) {
+        res.status(401).json({ error: 'Please log in to do that.' });
+        return;
+    }
+    try {
+        const result = await query(
+            'SELECT is_admin FROM users WHERE user_id = $1', [payload.userId]);
+        if (result.rows.length === 0 || result.rows[0].is_admin !== true) {
+            // the same message either way, so this doesn't reveal
+            // who the admins are
+            res.status(403).json({ error: 'Only an admin can do that.' });
+            return;
+        }
+        req.user = payload;
+        next();
+    } catch (err) {
+        console.error('requireAdmin failed:', err);
+        res.status(500).json({ error: 'Something went wrong.' });
+    }
 }

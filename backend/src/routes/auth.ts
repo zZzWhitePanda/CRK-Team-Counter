@@ -16,6 +16,7 @@ export const authRouter = Router();
 interface UserRow {
     user_id: number; username: string; email: string; is_admin: boolean;
     avatar?: string | null; avatar_data?: string | null;
+    title?: string | null; username_changed_at?: Date | string | null;
 }
 function publicUser(row: UserRow) {
     return {
@@ -23,12 +24,33 @@ function publicUser(row: UserRow) {
         isAdmin: row.is_admin,
         avatar: row.avatar ?? null,
         avatarData: row.avatar_data ?? null,
+        title: row.title ?? null,
+        // when they may next change their username (null = right now)
+        usernameChangeableAt: nextRenameAllowed(row.username_changed_at ?? null),
     };
 }
 
 // The columns every route below reads back, kept in one place so
 // they can't drift apart.
-const USER_COLUMNS = 'user_id, username, email, is_admin, avatar, avatar_data';
+const USER_COLUMNS =
+    'user_id, username, email, is_admin, avatar, avatar_data, title, username_changed_at';
+
+// ---- the username change cooldown ----
+// A profile lives at /u/<username>, so renaming breaks every link
+// anyone has to it. One change every 3 days keeps addresses stable.
+export const RENAME_COOLDOWN_DAYS = 3;
+
+/**
+ * Given when the name was last changed, work out when it may next
+ * be changed. Returns null when that's now (or they've never
+ * changed it), otherwise an ISO date string.
+ */
+function nextRenameAllowed(lastChanged: Date | string | null): string | null {
+    if (!lastChanged) return null;                 // never renamed
+    const next = new Date(lastChanged);
+    next.setDate(next.getDate() + RENAME_COOLDOWN_DAYS);
+    return next.getTime() > Date.now() ? next.toISOString() : null;
+}
 
 // ---- checking an uploaded profile picture ----
 // The browser shrinks the picture to 128x128 and re-compresses it
@@ -174,8 +196,37 @@ authRouter.patch('/me', requireAuth, async (req: Request, res: Response) => {
                 res.status(400).json({ error: 'Username must be 30 characters or fewer.' });
                 return;
             }
-            params.push(username);
-            sets.push(`username = $${params.length}`);
+
+            // Look up their current name and when they last changed
+            // it, so we can apply the cooldown.
+            const current = await query(
+                'SELECT username, username_changed_at FROM users WHERE user_id = $1',
+                [req.user!.userId]
+            );
+            if (current.rows.length === 0) {
+                res.status(404).json({ error: 'Account not found.' });
+                return;
+            }
+
+            // Only an actual CHANGE counts - re-saving the same name
+            // (e.g. when only the picture changed) shouldn't start
+            // a 3-day cooldown.
+            if (username !== current.rows[0].username) {
+                const blockedUntil = nextRenameAllowed(current.rows[0].username_changed_at);
+                if (blockedUntil) {
+                    const when = new Date(blockedUntil).toLocaleDateString('en-AU',
+                        { day: 'numeric', month: 'long', year: 'numeric' });
+                    res.status(429).json({
+                        error: `You can only change your username once every ${RENAME_COOLDOWN_DAYS} days. `
+                             + `You can change it again on ${when}.`,
+                    });
+                    return;
+                }
+                params.push(username);
+                sets.push(`username = $${params.length}`);
+                // start the clock for the next change
+                sets.push('username_changed_at = NOW()');
+            }
         }
 
         if (req.body.avatar !== undefined) {
@@ -200,6 +251,19 @@ authRouter.patch('/me', requireAuth, async (req: Request, res: Response) => {
         }
 
         if (sets.length === 0) {
+            // Nothing actually changed. That's not an error when they
+            // re-saved the name they already have, so just hand back
+            // the account as it stands.
+            if (req.body.username !== undefined) {
+                const unchanged = await query(
+                    `SELECT ${USER_COLUMNS} FROM users WHERE user_id = $1`, [req.user!.userId]);
+                const me = unchanged.rows[0];
+                res.json({
+                    token: makeToken({ userId: me.user_id, username: me.username, isAdmin: me.is_admin }),
+                    user: publicUser(me),
+                });
+                return;
+            }
             res.status(400).json({ error: 'Nothing to update.' });
             return;
         }

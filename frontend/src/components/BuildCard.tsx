@@ -15,6 +15,7 @@ import { Link } from 'react-router-dom';
 import { Cookie, PlayerBuild } from '../api';
 import { TeamRow } from './TeamRow';
 import { Avatar } from './Avatar';
+import { TitleBadge } from './TitleBadge';
 
 interface Props {
     build: PlayerBuild;
@@ -78,6 +79,7 @@ export function BuildCard({
                 >
                     {build.username}
                 </Link>
+                <TitleBadge title={build.title} small />
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
