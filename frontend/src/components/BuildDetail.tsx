@@ -53,7 +53,7 @@ export function BuildDetail({ build, roster, onClose, onLike }: Props) {
                 </h2>
                 <div className="detail-byline">
                     <Avatar who={build} username={build.username} size={28} />
-                    <Link to={`/u/${encodeURIComponent(build.username)}`} className="username-link">
+                    <Link to={`/u/${build.user_id}`} className="username-link">
                         {build.username}
                     </Link>
                     {onLike && (

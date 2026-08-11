@@ -22,6 +22,12 @@
 export const AVATAR_SIZE = 128;         // pixels, square
 export const MAX_FILE_BYTES = 8 * 1024 * 1024;   // 8 MB before shrinking
 
+// A theme's background picture covers the whole page, so it needs
+// to be far bigger than an avatar - but still small enough to keep
+// in a database row. 1600px wide at JPEG quality 0.72 lands around
+// 150-400 KB, which looks sharp on a normal screen.
+export const BACKGROUND_WIDTH = 1600;
+
 /**
  * Shrink an image file to a square data URI ready to save.
  * Rejects with a friendly message if the file isn't a usable image.
@@ -58,6 +64,65 @@ export function fileToAvatarDataUri(file: File): Promise<string> {
 
                 // 0.85 quality JPEG: small file, still looks clean at 128px
                 resolve(canvas.toDataURL('image/jpeg', 0.85));
+            } catch {
+                reject(new Error('That image could not be processed — try a different one.'));
+            }
+        };
+
+        image.onerror = () => {
+            URL.revokeObjectURL(objectUrl);
+            reject(new Error('That image could not be opened — try a different one.'));
+        };
+
+        image.src = objectUrl;
+    });
+}
+
+/**
+ * Shrink a picture for use as the page background.
+ *
+ * Unlike the avatar this is NOT cropped square - the whole picture
+ * is kept and only scaled down, because it gets stretched to cover
+ * the page anyway. Anything already narrower than BACKGROUND_WIDTH
+ * is left at its own size rather than being blown up and blurred.
+ */
+export function fileToBackgroundDataUri(file: File): Promise<string> {
+    return new Promise((resolve, reject) => {
+        if (!file.type.startsWith('image/')) {
+            reject(new Error('That file isn’t an image — pick a PNG, JPEG or WebP.'));
+            return;
+        }
+        if (file.size > MAX_FILE_BYTES) {
+            reject(new Error('That image is over 8 MB — please pick a smaller one.'));
+            return;
+        }
+
+        const objectUrl = URL.createObjectURL(file);
+        const image = new Image();
+
+        image.onload = () => {
+            URL.revokeObjectURL(objectUrl);
+            try {
+                // scale down to fit the target width, never up
+                const scale = Math.min(1, BACKGROUND_WIDTH / image.width);
+                const canvas = document.createElement('canvas');
+                canvas.width = Math.round(image.width * scale);
+                canvas.height = Math.round(image.height * scale);
+
+                const ctx = canvas.getContext('2d');
+                if (!ctx) throw new Error('canvas unavailable');
+                ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
+
+                const dataUri = canvas.toDataURL('image/jpeg', 0.72);
+
+                // The backend refuses a theme over ~1.5 MB, so say so
+                // here rather than letting the save fail later.
+                const bytes = Math.floor(dataUri.length * 3 / 4);
+                if (bytes > 1_200_000) {
+                    reject(new Error('That image is too detailed to save — try a smaller or simpler one.'));
+                    return;
+                }
+                resolve(dataUri);
             } catch {
                 reject(new Error('That image could not be processed — try a different one.'));
             }

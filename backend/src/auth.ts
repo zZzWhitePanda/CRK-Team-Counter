@@ -89,34 +89,47 @@ export function requireAuth(req: Request, res: Response, next: NextFunction) {
     next();
 }
 
-// requireAdmin: block the request unless the logged-in user is an
-// admin. Used for the one admin-only action, setting someone's
-// profile title.
+// ---- role checks ----
+// There are three roles: user, admin and owner.
 //
-// It deliberately re-reads is_admin FROM THE DATABASE instead of
-// trusting the isAdmin inside the token. A token is issued at login
-// and then never changes, so a token made before someone was made
-// an admin would say false (and one made before admin was REMOVED
-// would still say true). The database is the truth.
-export async function requireAdmin(req: Request, res: Response, next: NextFunction) {
-    const payload = readToken(req);
-    if (!payload) {
-        res.status(401).json({ error: 'Please log in to do that.' });
-        return;
-    }
-    try {
-        const result = await query(
-            'SELECT is_admin FROM users WHERE user_id = $1', [payload.userId]);
-        if (result.rows.length === 0 || result.rows[0].is_admin !== true) {
-            // the same message either way, so this doesn't reveal
-            // who the admins are
-            res.status(403).json({ error: 'Only an admin can do that.' });
+//   admin - can delete any community build (moderation)
+//   owner - all of that, PLUS awarding titles, banning accounts and
+//           promoting/demoting admins
+//
+// Both checks re-read the role FROM THE DATABASE rather than
+// trusting what's inside the token. A token is issued at login and
+// never changes afterwards, so one made before someone was promoted
+// would still say "user" - and, worse, one made before someone was
+// DEMOTED would still say "admin". The database is the truth.
+function requireRole(allowed: string[], refusal: string) {
+    return async (req: Request, res: Response, next: NextFunction) => {
+        const payload = readToken(req);
+        if (!payload) {
+            res.status(401).json({ error: 'Please log in to do that.' });
             return;
         }
-        req.user = payload;
-        next();
-    } catch (err) {
-        console.error('requireAdmin failed:', err);
-        res.status(500).json({ error: 'Something went wrong.' });
-    }
+        try {
+            const result = await query(
+                'SELECT role FROM users WHERE user_id = $1', [payload.userId]);
+            const role = result.rows[0]?.role;
+            if (!role || !allowed.includes(role)) {
+                // the same message however it failed, so this doesn't
+                // tell a stranger who the staff are
+                res.status(403).json({ error: refusal });
+                return;
+            }
+            req.user = payload;
+            next();
+        } catch (err) {
+            console.error('role check failed:', err);
+            res.status(500).json({ error: 'Something went wrong.' });
+        }
+    };
 }
+
+// Admins moderate: they can delete any community build.
+export const requireAdmin = requireRole(['admin', 'owner'], 'Only a moderator can do that.');
+
+// The owner does everything an admin does, plus awarding titles,
+// banning accounts and promoting other admins.
+export const requireOwner = requireRole(['owner'], 'Only the site owner can do that.');

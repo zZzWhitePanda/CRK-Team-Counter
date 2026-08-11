@@ -73,7 +73,7 @@ export function BuildCard({
             <div className="build-card-byline">
                 <Avatar who={build} username={build.username} size={24} />
                 <Link
-                    to={`/u/${encodeURIComponent(build.username)}`}
+                    to={`/u/${build.user_id}`}
                     className="username-link"
                     onClick={e => e.stopPropagation()}
                 >

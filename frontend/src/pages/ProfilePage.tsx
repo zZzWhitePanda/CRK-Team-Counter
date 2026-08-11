@@ -1,5 +1,9 @@
 // ============================================================
-// ProfilePage.tsx - a player's profile, at /u/<username>.
+// ProfilePage.tsx - a player's profile, at /u/<user id>.
+//
+// The address uses the account NUMBER, not the name (the same way
+// Roblox uses /users/<id>). That means changing your username
+// never breaks a link somebody saved to your profile.
 //
 // EVERYONE has one and anyone can look at anyone's, which is why
 // usernames are clickable all over the Community Builds page.
@@ -17,10 +21,10 @@
 // ============================================================
 
 import { useEffect, useRef, useState } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useParams, Link } from 'react-router-dom';
 import {
     Heart, Gem, Pencil, Check, Upload, Trash2, Shield,
-    UserPlus, UserCheck, Clock, Tag,
+    UserPlus, UserCheck, Tag, Ban,
 } from 'lucide-react';
 import {
     Cookie, PlayerBuild, Profile, avatarUrl,
@@ -35,14 +39,8 @@ import { TitleBadge } from '../components/TitleBadge';
 import { fileToAvatarDataUri } from '../avatarUpload';
 import { useAuth } from '../auth';
 
-// how a cooldown date is written out, e.g. "14 August 2026"
-function formatDate(iso: string): string {
-    return new Date(iso).toLocaleDateString('en-AU',
-        { day: 'numeric', month: 'long', year: 'numeric' });
-}
-
 export function ProfilePage() {
-    const { username = '' } = useParams();
+    const { userId = '' } = useParams();
     const { user, saveProfile } = useAuth();
 
     const [profile, setProfile] = useState<Profile | null>(null);
@@ -57,7 +55,7 @@ export function ProfilePage() {
     useEffect(() => {
         setLoading(true);
         setError('');
-        Promise.all([getProfile(username), getCookies()])
+        Promise.all([getProfile(userId), getCookies()])
             .then(([res, cookies]) => {
                 setProfile(res.profile);
                 setBuilds(res.builds);
@@ -68,7 +66,7 @@ export function ProfilePage() {
         // user?.userId rather than user: the user OBJECT is replaced
         // on every profile save, which would re-run this every time.
         // Only actually logging in or out should reload the page.
-    }, [username, user?.userId]);
+    }, [userId, user?.userId]);
 
     // ---- owner actions ----
     const [busyBuild, setBusyBuild] = useState<number | null>(null);
@@ -182,7 +180,6 @@ function ProfileHeader({ profile, roster, onSaved, saveProfile }: {
     onSaved: (updated: Partial<Profile>) => void;
     saveProfile: ReturnType<typeof useAuth>['saveProfile'];
 }) {
-    const navigate = useNavigate();
     const { user } = useAuth();
     const [editingName, setEditingName] = useState(false);
     const [name, setName] = useState(profile.username);
@@ -199,10 +196,6 @@ function ProfileHeader({ profile, roster, onSaved, saveProfile }: {
 
     const picture = avatarUrl(profile);
 
-    // The rename cooldown comes from the logged-in user's own record,
-    // so it only ever applies to your own profile. null = you can
-    // rename right now.
-    const renameBlockedUntil = profile.isMe ? (user?.usernameChangeableAt ?? null) : null;
 
     // small wrapper so every save handles errors the same way
     async function save(changes: Parameters<typeof saveProfile>[0], done: string) {
@@ -228,15 +221,11 @@ function ProfileHeader({ profile, roster, onSaved, saveProfile }: {
         const trimmed = name.trim();
         if (trimmed === profile.username) { setEditingName(false); return; }
         if (trimmed.length < 3) { setProblem('Username must be at least 3 characters.'); return; }
+        // No navigation needed any more: the profile lives at
+        // /u/<id>, which doesn't change when the name does. That's
+        // the whole reason for using ids in the address.
         if (await save({ username: trimmed }, 'Username changed.')) {
             setEditingName(false);
-            // The address bar still says the OLD name. This has to go
-            // through the router's navigate() - changing the address
-            // directly (history.replaceState) doesn't tell React
-            // Router, so the page would keep reloading the old name
-            // and show "That player could not be found".
-            // replace: true so Back doesn't return to the dead name.
-            navigate(`/u/${encodeURIComponent(trimmed)}`, { replace: true });
         }
     }
 
@@ -245,7 +234,7 @@ function ProfileHeader({ profile, roster, onSaved, saveProfile }: {
         if (!user) { setProblem('Log in to follow other players.'); return; }
         setBusy(true); setProblem('');
         try {
-            const res = await toggleFollow(profile.username);
+            const res = await toggleFollow(profile.userId);
             onSaved({ followedByMe: res.following, followers: res.followers });
         } catch (err) {
             setProblem(err instanceof Error ? err.message : 'Could not do that.');
@@ -258,7 +247,7 @@ function ProfileHeader({ profile, roster, onSaved, saveProfile }: {
     async function handleTitle() {
         setBusy(true); setProblem(''); setMessage('');
         try {
-            const res = await setUserTitle(profile.username, titleDraft.trim() || null);
+            const res = await setUserTitle(profile.userId, titleDraft.trim() || null);
             onSaved({ title: res.title });
             setEditingTitle(false);
             setMessage(res.title ? `Title set to "${res.title}".` : 'Title cleared.');
@@ -359,18 +348,17 @@ function ProfileHeader({ profile, roster, onSaved, saveProfile }: {
                                 <Shield size={12} aria-hidden="true" /> Admin
                             </span>
                         )}
-                        {/* Renaming is limited to once every 3 days, because
-                            a profile lives at /u/<name> and renaming breaks
-                            every link anyone has to it. */}
+                        {profile.isBanned && (
+                            <span className="tag banned-tag" title="This account is banned">
+                                <Ban size={12} aria-hidden="true" /> Banned
+                            </span>
+                        )}
+                        {/* Renaming is unrestricted: the profile lives at
+                            /u/<id>, so a new name never breaks a link. */}
                         {profile.isMe && (
-                            renameBlockedUntil
-                                ? <span className="rename-locked" title="Usernames can only change every 3 days">
-                                    <Clock size={13} aria-hidden="true" />
-                                    Rename available {formatDate(renameBlockedUntil)}
-                                  </span>
-                                : <button className="profile-edit-button" onClick={() => setEditingName(true)}>
-                                    <Pencil size={13} aria-hidden="true" /> Change
-                                  </button>
+                            <button className="profile-edit-button" onClick={() => setEditingName(true)}>
+                                <Pencil size={13} aria-hidden="true" /> Change
+                            </button>
                         )}
                     </div>
                 )}
@@ -413,7 +401,7 @@ function ProfileHeader({ profile, roster, onSaved, saveProfile }: {
                     This only HIDES the control from everyone else.
                     The real protection is on the backend, which checks
                     the admin flag in the database and returns 403. */}
-                {profile.viewerIsAdmin && (
+                {profile.viewerRole === 'owner' && (
                     <div className="title-admin">
                         {editingTitle ? (
                             <div className="title-admin-edit">
@@ -464,6 +452,7 @@ function ProfileHeader({ profile, roster, onSaved, saveProfile }: {
             {/* the followers / following list popup */}
             {showList && (
                 <FollowListModal
+                    userId={profile.userId}
                     username={profile.username}
                     kind={showList}
                     onClose={() => setShowList(null)}

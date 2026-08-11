@@ -21,6 +21,7 @@ import { CounterToolPage } from './pages/CounterToolPage';
 import { CookiesPage } from './pages/CookiesPage';
 import { ProfilePage } from './pages/ProfilePage';
 import { SettingsPage } from './pages/SettingsPage';
+import { AdminPage } from './pages/AdminPage';
 import { useAuth } from './auth';
 
 export function App() {
@@ -37,7 +38,7 @@ export function App() {
                         {user ? (
                             <div className="topbar-user">
                                 <Link
-                                    to={`/u/${encodeURIComponent(user.username)}`}
+                                    to={`/u/${user.userId}`}
                                     className="topbar-profile-link"
                                     title="Your profile"
                                 >
@@ -59,9 +60,11 @@ export function App() {
                             <Route path="/builds" element={<CommunityBuildsPage />} />
                             <Route path="/counter" element={<CounterToolPage />} />
                             <Route path="/cookies" element={<CookiesPage />} />
-                            {/* anyone's profile - your own is just the one
-                                where the username happens to be yours */}
-                            <Route path="/u/:username" element={<ProfilePage />} />
+                            {/* Anyone's profile, addressed by account NUMBER
+                                (/u/7) rather than name - so renaming never
+                                breaks a link somebody saved. */}
+                            <Route path="/u/:userId" element={<ProfilePage />} />
+                            <Route path="/admin" element={<AdminPage />} />
                             <Route path="/settings" element={<SettingsPage />} />
                         </Routes>
                     </main>

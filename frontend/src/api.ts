@@ -48,9 +48,10 @@ export interface MetaTeam {
 export interface PlayerBuild {
     build_id: number;
     username: string;
+    user_id?: number;              // the author, so their name can link to /u/<id>
     avatar?: string | null;        // the author's cookie-portrait avatar
     avatar_data?: string | null;   // or their uploaded picture
-    title?: string | null;         // their admin-awarded badge
+    title?: string | null;         // their owner-awarded badge
     opponent_team: string[];
     counter_team: string[];
     // gear_setup holds the whole rich build (toppings, beascuits,
@@ -75,14 +76,18 @@ export interface AuthUser {
     username: string;
     email: string;
     isAdmin: boolean;
+    role: Role;
     avatar: string | null;       // a cookie portrait filename
     avatarData: string | null;   // or an uploaded picture, as a data URI
-    title: string | null;        // admin-awarded badge ('OG', 'Owner'…)
-    // when they may next change their username; null = right now.
-    // A profile lives at /u/<name>, so renaming breaks old links -
-    // hence the cooldown.
-    usernameChangeableAt: string | null;
+    title: string | null;        // owner-awarded badge ('OG', 'Owner'…)
+    theme: unknown;              // their saved theme, or null
 }
+
+// What someone is allowed to do.
+//   user  - a normal player
+//   admin - can delete any community build (moderation)
+//   owner - all of that, plus titles, bans and promoting admins
+export type Role = 'user' | 'admin' | 'owner';
 
 // someone's public profile (anyone can view anyone's)
 export interface Profile {
@@ -91,7 +96,9 @@ export interface Profile {
     avatar: string | null;
     avatarData: string | null;
     title: string | null;
+    role: Role;
     isAdmin: boolean;
+    isBanned: boolean;
     createdAt: string;
     isMe: boolean;         // true when you're looking at your own profile
     buildCount: number;
@@ -99,11 +106,26 @@ export interface Profile {
     followers: number;
     following: number;
     followedByMe: boolean;
-    viewerIsAdmin: boolean;   // can the person LOOKING award a title?
+    viewerRole: Role;      // what the person LOOKING is allowed to do
+}
+
+// one account row in the admin panel
+export interface AdminUser {
+    user_id: number;
+    username: string;
+    avatar: string | null;
+    avatar_data: string | null;
+    title: string | null;
+    role: Role;
+    banned_at: string | null;
+    ban_reason: string | null;
+    created_at: string;
+    build_count: string;   // Postgres COUNT comes back as a string
 }
 
 // one entry in a followers / following list
 export interface FollowUser {
+    user_id: number;
     username: string;
     avatar: string | null;
     avatar_data: string | null;
@@ -223,11 +245,12 @@ export function updateProfile(changes: {
     return patchJson<{ token: string; user: AuthUser }>('/api/auth/me', changes);
 }
 
-// GET /api/users/:username - anyone's profile plus their builds.
+// GET /api/users/:id - anyone's profile plus their builds.
 // Works logged out; your own private builds only appear for you.
-export function getProfile(username: string) {
+// Keyed by id, so renaming never breaks a saved link.
+export function getProfile(userId: number | string) {
     return getJson<{ profile: Profile; builds: PlayerBuild[] }>(
-        '/api/users/' + encodeURIComponent(username));
+        '/api/users/' + encodeURIComponent(String(userId)));
 }
 
 // PATCH /api/builds/:id - show a build to everyone, or hide it (owner only)
@@ -243,34 +266,78 @@ export function deleteBuild(buildId: number) {
 
 // ---- following ------------------------------------------------
 
-// POST /api/follows/:username - follow or unfollow (a toggle,
+// POST /api/follows/:id - follow or unfollow (a toggle,
 // the same way the like button works)
-export function toggleFollow(username: string) {
+export function toggleFollow(userId: number) {
     return postJson<{ username: string; following: boolean; followers: number }>(
-        '/api/follows/' + encodeURIComponent(username), {});
+        '/api/follows/' + userId, {});
 }
 
-// GET /api/follows/:username/followers - who follows them
-export function getFollowers(username: string) {
+// GET /api/follows/:id/followers - who follows them
+export function getFollowers(userId: number) {
     return getJson<{ username: string; users: FollowUser[] }>(
-        `/api/follows/${encodeURIComponent(username)}/followers`);
+        `/api/follows/${userId}/followers`);
 }
 
-// GET /api/follows/:username/following - who they follow
-export function getFollowing(username: string) {
+// GET /api/follows/:id/following - who they follow
+export function getFollowing(userId: number) {
     return getJson<{ username: string; users: FollowUser[] }>(
-        `/api/follows/${encodeURIComponent(username)}/following`);
+        `/api/follows/${userId}/following`);
 }
 
-// ---- titles (admin only) --------------------------------------
+// ---- staff actions --------------------------------------------
+// Every one of these is checked again on the server against the
+// role stored in the database. Hiding the buttons is only tidiness;
+// the 403 is the real protection.
 
-// PATCH /api/users/:username/title - award or clear someone's badge.
-// The backend checks the admin flag in the database, so this failing
-// with 403 for a normal player is the real protection; hiding the
-// button is only for tidiness.
-export function setUserTitle(username: string, title: string | null) {
-    return patchJson<{ username: string; title: string | null }>(
-        `/api/users/${encodeURIComponent(username)}/title`, { title });
+// GET /api/users - every account (admins and the owner)
+export function getAllUsers() {
+    return getJson<AdminUser[]>('/api/users');
+}
+
+// PATCH /api/users/:id/title - award or clear a badge (OWNER only)
+export function setUserTitle(userId: number, title: string | null) {
+    return patchJson<{ user_id: number; username: string; title: string | null }>(
+        `/api/users/${userId}/title`, { title });
+}
+
+// PATCH /api/users/:id/role - make somebody a moderator, or undo it
+// (OWNER only). The owner's own role can't be changed.
+export function setUserRole(userId: number, role: 'user' | 'admin') {
+    return patchJson<{ user_id: number; username: string; role: Role }>(
+        `/api/users/${userId}/role`, { role });
+}
+
+// POST /api/users/:id/ban - ban or un-ban (OWNER only). A ban keeps
+// all their data and only stops them logging in.
+export function setUserBanned(userId: number, banned: boolean, reason?: string) {
+    return postJson<{ user_id: number; username: string; banned_at: string | null; ban_reason: string | null }>(
+        `/api/users/${userId}/ban`, { banned, reason });
+}
+
+// ---- themes ---------------------------------------------------
+
+export interface SavedTheme { theme_id: number; name: string; theme: unknown; }
+
+// PUT /api/auth/me/theme - remember the theme I'm using now
+export function saveMyTheme(theme: unknown) {
+    return sendJson<{ saved: boolean }>('PUT', '/api/auth/me/theme', { theme });
+}
+
+// GET /api/auth/me/themes - my saved presets
+export function getMyThemes() {
+    return getJson<SavedTheme[]>('/api/auth/me/themes');
+}
+
+// POST /api/auth/me/themes - save the current theme under a name
+// (saving over a name you've used already replaces it)
+export function saveThemePreset(name: string, theme: unknown) {
+    return postJson<SavedTheme>('/api/auth/me/themes', { name, theme });
+}
+
+// DELETE /api/auth/me/themes/:id - remove one of my presets
+export function deleteThemePreset(themeId: number) {
+    return getJson<{ deleted: number }>(`/api/auth/me/themes/${themeId}`, { method: 'DELETE' });
 }
 
 // ---- picture helpers ------------------------------------------

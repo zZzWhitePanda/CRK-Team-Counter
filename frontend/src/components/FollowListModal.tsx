@@ -15,23 +15,24 @@ import { Avatar } from './Avatar';
 import { TitleBadge } from './TitleBadge';
 
 interface Props {
-    username: string;
+    userId: number;
+    username: string;      // only for the heading
     kind: 'followers' | 'following';
     onClose: () => void;
 }
 
-export function FollowListModal({ username, kind, onClose }: Props) {
+export function FollowListModal({ userId, username, kind, onClose }: Props) {
     const [users, setUsers] = useState<FollowUser[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
 
     useEffect(() => {
         const load = kind === 'followers' ? getFollowers : getFollowing;
-        load(username)
+        load(userId)
             .then(res => setUsers(res.users))
             .catch(err => setError(err.message))
             .finally(() => setLoading(false));
-    }, [username, kind]);
+    }, [userId, kind]);
 
     const heading = kind === 'followers'
         ? `${username}'s followers`
@@ -59,8 +60,8 @@ export function FollowListModal({ username, kind, onClose }: Props) {
                 <div className="follow-list">
                     {users.map(u => (
                         <Link
-                            key={u.username}
-                            to={`/u/${encodeURIComponent(u.username)}`}
+                            key={u.user_id}
+                            to={`/u/${u.user_id}`}
                             className="follow-row"
                             onClick={onClose}
                         >

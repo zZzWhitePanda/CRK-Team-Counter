@@ -33,11 +33,13 @@ async function markLiked(builds: { build_id: number; likedByMe?: boolean }[], us
 buildsRouter.get('/top', optionalAuth, async (req: Request, res: Response) => {
     try {
         const result = await query(
-            `SELECT b.build_id, u.username, u.avatar, u.avatar_data, u.title, b.opponent_team, b.counter_team,
+            `SELECT b.build_id, b.user_id, u.username, u.avatar, u.avatar_data, u.title, b.opponent_team, b.counter_team,
                     b.gear_setup, b.note, b.likes, b.is_public, b.created_at
              FROM user_builds b
              JOIN users u ON u.user_id = b.user_id
-             WHERE b.is_public = TRUE
+             -- banned accounts drop out of the public list; their
+             -- builds aren't deleted, so un-banning restores them
+             WHERE b.is_public = TRUE AND u.banned_at IS NULL
              ORDER BY b.likes DESC, b.created_at DESC
              LIMIT 20`
         );
@@ -77,7 +79,7 @@ buildsRouter.post('/', requireAuth, async (req: Request, res: Response) => {
         const result = await query(
             `INSERT INTO user_builds (user_id, opponent_team, counter_team, gear_setup, note)
              VALUES ($1, $2, $3, $4, $5)
-             RETURNING build_id, opponent_team, counter_team, gear_setup, note, likes, is_public, created_at`,
+             RETURNING build_id, user_id, opponent_team, counter_team, gear_setup, note, likes, is_public, created_at`,
             [req.user!.userId, opponentTeam, counterTeam, JSON.stringify(gearSetup), note || null]
         );
 
@@ -179,12 +181,22 @@ buildsRouter.delete('/:id', requireAuth, async (req: Request, res: Response) => 
             return;
         }
 
-        // same owner check as above. The likes for this build are
-        // removed automatically by the ON DELETE CASCADE rule.
-        const result = await query(
-            `DELETE FROM user_builds WHERE build_id = $1 AND user_id = $2 RETURNING build_id`,
-            [buildId, req.user!.userId]
-        );
+        // Staff can remove ANY build - that's the moderation power.
+        // Everyone else can only remove their own, which is what the
+        // "AND user_id = $2" below enforces.
+        const me = await query('SELECT role FROM users WHERE user_id = $1', [req.user!.userId]);
+        const isStaff = ['admin', 'owner'].includes(me.rows[0]?.role);
+
+        // The likes for this build are removed automatically by the
+        // ON DELETE CASCADE rule on build_likes.
+        const result = isStaff
+            ? await query(
+                'DELETE FROM user_builds WHERE build_id = $1 RETURNING build_id',
+                [buildId])
+            : await query(
+                'DELETE FROM user_builds WHERE build_id = $1 AND user_id = $2 RETURNING build_id',
+                [buildId, req.user!.userId]);
+
         if (result.rows.length === 0) {
             res.status(404).json({ error: "That build wasn't found, or isn't yours." });
             return;

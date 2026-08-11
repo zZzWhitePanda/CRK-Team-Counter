@@ -25,10 +25,12 @@ const PORT = Number(process.env.PORT) || 4000;
 
 // ---- Middleware (runs before every route) ----
 app.use(cors());          // lets the React dev site (different port) call this API
-// turns JSON request bodies into req.body. The limit is raised from
-// Express's default 100kb because uploading a profile picture sends
-// the image inside the JSON; the route itself caps it at 200 KB.
-app.use(express.json({ limit: '1mb' }));
+// Turns JSON request bodies into req.body. The limit is well above
+// Express's 100kb default because pictures travel INSIDE the JSON:
+// a profile picture (capped at 200 KB by its route) and a theme's
+// background image (capped at ~1.5 MB by its route). This outer
+// limit is the backstop that rejects anything absurd outright.
+app.use(express.json({ limit: '4mb' }));
 
 // ---- Routes ----
 app.use('/api/cookies', cookiesRouter);

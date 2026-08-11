@@ -1,9 +1,12 @@
 // ============================================================
 // routes/follows.ts - following other players.
 //
-// POST /api/follows/:username        follow / unfollow (a toggle)
-// GET  /api/follows/:username/followers   who follows them
-// GET  /api/follows/:username/following   who they follow
+// POST /api/follows/:id        follow / unfollow (a toggle)
+// GET  /api/follows/:id/followers   who follows them
+// GET  /api/follows/:id/following   who they follow
+//
+// Keyed by user id, not username, for the same reason profiles are:
+// a rename must never break anything that points at a person.
 //
 // Following works exactly like liking a build: one row per
 // relationship, with a UNIQUE rule in the database so the same
@@ -17,20 +20,19 @@ import { requireAuth } from '../auth';
 
 export const followsRouter = Router();
 
-// Find a user by name (names are matched case-insensitively, the
-// same way the profile page looks them up).
-async function findUser(username: string) {
+// Find a user by their id.
+async function findUser(id: string) {
+    const userId = Number(id);
+    if (!Number.isInteger(userId)) return undefined;
     const result = await query(
-        'SELECT user_id, username FROM users WHERE LOWER(username) = LOWER($1)',
-        [username]
-    );
+        'SELECT user_id, username FROM users WHERE user_id = $1', [userId]);
     return result.rows[0] as { user_id: number; username: string } | undefined;
 }
 
 // ---- FOLLOW / UNFOLLOW (login required) ----
-followsRouter.post('/:username', requireAuth, async (req: Request, res: Response) => {
+followsRouter.post('/:id', requireAuth, async (req: Request, res: Response) => {
     try {
-        const target = await findUser(String(req.params.username));
+        const target = await findUser(String(req.params.id));
         if (!target) {
             res.status(404).json({ error: 'That player could not be found.' });
             return;
@@ -75,7 +77,7 @@ followsRouter.post('/:username', requireAuth, async (req: Request, res: Response
         });
 
     } catch (err) {
-        console.error('POST /api/follows/:username failed:', err);
+        console.error('POST /api/follows/:id failed:', err);
         res.status(500).json({ error: 'Something went wrong.' });
     }
 });
@@ -85,7 +87,7 @@ followsRouter.post('/:username', requireAuth, async (req: Request, res: Response
 function listRoute(kind: 'followers' | 'following') {
     return async (req: Request, res: Response) => {
         try {
-            const target = await findUser(String(req.params.username));
+            const target = await findUser(String(req.params.id));
             if (!target) {
                 res.status(404).json({ error: 'That player could not be found.' });
                 return;
@@ -104,7 +106,7 @@ function listRoute(kind: 'followers' | 'following') {
                 : ['follower_id', 'following_id'];
 
             const result = await query(
-                `SELECT u.username, u.avatar, u.avatar_data, u.title
+                `SELECT u.user_id, u.username, u.avatar, u.avatar_data, u.title
                  FROM follows f
                  JOIN users u ON u.user_id = f.${pickColumn}
                  WHERE f.${matchColumn} = $1
@@ -116,11 +118,11 @@ function listRoute(kind: 'followers' | 'following') {
             res.json({ username: target.username, users: result.rows });
 
         } catch (err) {
-            console.error(`GET /api/follows/:username/${kind} failed:`, err);
+            console.error(`GET /api/follows/:id/${kind} failed:`, err);
             res.status(500).json({ error: 'Something went wrong.' });
         }
     };
 }
 
-followsRouter.get('/:username/followers', listRoute('followers'));
-followsRouter.get('/:username/following', listRoute('following'));
+followsRouter.get('/:id/followers', listRoute('followers'));
+followsRouter.get('/:id/following', listRoute('following'));

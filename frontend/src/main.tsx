@@ -5,16 +5,23 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { App } from './App';
 import { AuthProvider } from './auth';
-import { applyAccent, getSavedAccent } from './accent';
+import { ThemeProvider } from './themeContext';
+import { applyTheme, loadLocalTheme } from './theme';
 import './theme.css';
 
-// apply the user's saved accent colour before the app paints
-applyAccent(getSavedAccent());
+// Paint the saved theme BEFORE React renders anything. If this
+// waited for the app to start, the page would flash the default
+// colours first, which looks broken.
+applyTheme(loadLocalTheme());
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
     <React.StrictMode>
+        {/* ThemeProvider sits inside AuthProvider because it needs to
+            know who's logged in to load their saved theme */}
         <AuthProvider>
-            <App />
+            <ThemeProvider>
+                <App />
+            </ThemeProvider>
         </AuthProvider>
     </React.StrictMode>
 );
