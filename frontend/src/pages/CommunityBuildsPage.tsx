@@ -5,9 +5,10 @@
 // ============================================================
 
 import { useEffect, useState } from 'react';
-import { Trophy, Plus, Heart, Settings2, Gem } from 'lucide-react';
+import { Trophy, Plus, Settings2, Gem } from 'lucide-react';
 import { Cookie, PlayerBuild, getCookies, getTopBuilds, likeBuild, submitBuild } from '../api';
-import { TeamRow } from '../components/TeamRow';
+import { BuildCard } from '../components/BuildCard';
+import { BuildDetail } from '../components/BuildDetail';
 import { CookiePicker } from '../components/CookiePicker';
 import { CookieBuildEditor } from '../components/CookieBuildEditor';
 import { EnemyCookieEditor } from '../components/EnemyCookieEditor';
@@ -27,6 +28,8 @@ export function CommunityBuildsPage() {
     const [loaded, setLoaded] = useState(false);
     const [showAuth, setShowAuth] = useState(false);
     const [showForm, setShowForm] = useState(false);
+    // the build whose full details popup is open, if any
+    const [openBuild, setOpenBuild] = useState<PlayerBuild | null>(null);
 
     function load() {
         Promise.all([getTopBuilds(), getCookies()])
@@ -42,8 +45,11 @@ export function CommunityBuildsPage() {
         if (!user) { setShowAuth(true); return; }   // must be logged in
         try {
             const res = await likeBuild(buildId);
-            setBuilds(prev => prev.map(b =>
-                b.build_id === buildId ? { ...b, likes: res.likes, likedByMe: res.likedByMe } : b));
+            const apply = (b: PlayerBuild) =>
+                b.build_id === buildId ? { ...b, likes: res.likes, likedByMe: res.likedByMe } : b;
+            setBuilds(prev => prev.map(apply));
+            // keep the open popup's heart in step with the list
+            setOpenBuild(prev => (prev ? apply(prev) : prev));
         } catch (err) {
             setError(err instanceof Error ? err.message : 'Could not like that.');
         }
@@ -94,32 +100,28 @@ export function CommunityBuildsPage() {
                 </div>
             )}
 
-            {/* the build list */}
+            {/* the build list - click a card for the full build */}
             {builds.map((build, index) => (
-                <div key={build.build_id} className="card card-interactive" style={{ marginBottom: 16 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 4, flexWrap: 'wrap' }}>
-                        <span className="rank-badge">#{index + 1}</span>
-                        <h3 style={{ flex: 1 }}>{build.counter_team[0]} Comp</h3>
-                        <button
-                            className={'like-button' + (build.likedByMe ? ' liked' : '')}
-                            onClick={() => handleLike(build.build_id)}
-                            title={user ? (build.likedByMe ? 'Unlike' : 'Like') : 'Log in to like'}
-                        >
-                            <Heart size={18} fill={build.likedByMe ? 'currentColor' : 'none'} aria-hidden="true" />
-                            {build.likes}
-                        </button>
-                    </div>
-
-                    <p className="muted" style={{ marginBottom: 12 }}>by {build.username}</p>
-
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                        <TeamRow label="VS." kind="enemy" cookieNames={build.opponent_team} allCookies={roster} />
-                        <TeamRow label="USE" kind="ally" cookieNames={build.counter_team} allCookies={roster} />
-                    </div>
-
-                    {build.note && <p style={{ marginTop: 12 }}>{build.note}</p>}
-                </div>
+                <BuildCard
+                    key={build.build_id}
+                    build={build}
+                    roster={roster}
+                    rank={index + 1}
+                    onOpen={() => setOpenBuild(build)}
+                    onLike={() => handleLike(build.build_id)}
+                />
             ))}
+
+            {/* everything the author saved: toppings, tarts, beascuits,
+                ascensions, levels and both teams' treasures */}
+            {openBuild && (
+                <BuildDetail
+                    build={openBuild}
+                    roster={roster}
+                    onClose={() => setOpenBuild(null)}
+                    onLike={() => handleLike(openBuild.build_id)}
+                />
+            )}
 
             {showAuth && <AuthModal onClose={() => setShowAuth(false)} />}
         </div>

@@ -150,11 +150,13 @@ h3 { font-size: 18px; }
 }
 .topbar-user { display: flex; align-items: center; gap: 10px; color: var(--color-text); font-weight: 600; }
 
+/* The content used to be capped at 1240px and centred. It now fills
+   the whole window, like paimon.moe, so the 190-cookie roster gets
+   many more cards per row instead of a narrow column with big empty
+   margins either side. */
 .content {
-    padding: 40px 48px;
-    max-width: 1240px;
+    padding: 40px 40px 56px;
     width: 100%;
-    margin: 0 auto;
 }
 
 /* ---- sidebar ---- */
@@ -172,17 +174,47 @@ h3 { font-size: 18px; }
     height: 100dvh;
 }
 
+/* The logo block holds the site name with Shadow Milk Cookie faded
+   in behind it (the same idea as the character behind paimon.moe's
+   logo). The picture is positioned behind the text with z-index and
+   masked so it fades out towards the bottom instead of stopping at
+   a hard edge. */
 .sidebar-logo {
+    position: relative;
+    padding: 0 12px 20px;
+    overflow: hidden;
+    isolation: isolate;      /* keeps the z-index below inside this box */
+}
+
+.sidebar-hero {
+    position: absolute;
+    z-index: -1;
+    right: -30px;
+    top: -14px;
+    width: 190px;
+    max-width: none;
+    pointer-events: none;
+    opacity: 0.22;
+    /* fade the picture out at the bottom and left so it blends into
+       the sidebar rather than being a floating cut-out */
+    -webkit-mask-image: linear-gradient(200deg, #000 15%, transparent 78%);
+    mask-image: linear-gradient(200deg, #000 15%, transparent 78%);
+    filter: saturate(1.15);
+}
+
+.sidebar-logo-text {
+    position: relative;
+    display: block;
     font-family: var(--font-heading);
-    color: var(--color-text);
     font-size: 30px;
     letter-spacing: 1px;
-    padding: 0 12px 20px;
     /* subtle gradient text for the logo */
     background: linear-gradient(135deg, #FFFFFF 0%, #B9AEFF 100%);
     -webkit-background-clip: text;
     background-clip: text;
     -webkit-text-fill-color: transparent;
+    /* a dark halo so the name stays readable over the artwork */
+    filter: drop-shadow(0 2px 6px rgba(9, 10, 22, 0.9));
 }
 .sidebar-logo small {
     display: block;
@@ -485,12 +517,22 @@ h3 { font-size: 18px; }
 }
 .modal-close:hover { color: var(--color-text); background: rgba(255,255,255,0.08); }
 
-.picker-modal { max-width: 720px; max-height: 82vh; display: flex; flex-direction: column; }
+.picker-modal { max-width: 1000px; max-height: 84vh; display: flex; flex-direction: column; }
+/* The popup is a flex column: header, toolbar, then this scrolling
+   area. flex:1 makes it take the leftover height and min-height:0
+   lets it actually shrink - without that, a flex item refuses to go
+   below its content size and the roster spills out of the card. */
+.picker-scroll {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    padding-right: 4px;
+}
+
 .picker-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(124px, 1fr));
     gap: 10px;
-    overflow-y: auto;
     padding: 2px;
 }
 .picker-option {
@@ -720,4 +762,537 @@ h3 { font-size: 18px; }
     .picker-slot { height: 100px; }
     .build-button, .info-button { width: 100px; }
     .beascuit-stats { grid-template-columns: repeat(2, 1fr); }
+}
+
+
+/* ============================================================
+   ROSTER: toolbar, sort controls and section headings
+   The layout follows paimon.moe - a "Sort by" DROP-DOWN with a
+   separate ascending/descending button beside it, and the results
+   split into labelled sections instead of one long list.
+   ============================================================ */
+
+.roster-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-bottom: 18px;
+}
+
+.sort-controls {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+}
+
+.sort-label {
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0.6px;
+    text-transform: uppercase;
+    color: var(--color-text-muted);
+    white-space: nowrap;
+}
+
+/* the drop-down. appearance:none removes the OS styling so it can
+   match the rest of the site; the arrow is drawn as a background
+   image because a <select> can't hold an icon element. */
+.sort-select {
+    width: auto;
+    min-width: 150px;
+    padding: 11px 38px 11px 14px;
+    appearance: none;
+    -webkit-appearance: none;
+    cursor: pointer;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%23A6ABD6' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 13px center;
+}
+.sort-select:hover { border-color: var(--color-border-strong); }
+
+/* the button that flips ascending <-> descending */
+.sort-direction {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    padding: 11px 15px;
+    background: var(--color-input);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-small);
+    color: var(--color-text-body);
+    font-family: var(--font-body);
+    font-size: 14px;
+    font-weight: 600;
+    white-space: nowrap;
+    cursor: pointer;
+    transition: border-color 180ms var(--ease), color 180ms var(--ease),
+                transform 140ms var(--ease-bounce);
+}
+.sort-direction:hover {
+    border-color: var(--color-primary);
+    color: var(--color-text);
+    transform: translateY(-1px);
+}
+.sort-direction:active { transform: scale(0.95); }
+
+/* slightly tighter inside the cookie-picker popup */
+.sort-controls.compact .sort-label { display: none; }
+.sort-controls.compact .sort-select { min-width: 128px; padding-top: 9px; padding-bottom: 9px; }
+.sort-controls.compact .sort-direction { padding: 9px 12px; font-size: 13px; }
+
+/* ---- the heading above each section ---- */
+.group-heading {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 19px;
+    margin-bottom: 14px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--color-border);
+}
+.group-heading.small { font-size: 15px; margin-bottom: 10px; }
+
+/* the coloured dot beside a heading - it takes the rarity colour
+   when sorting by rarity, so the sections read at a glance */
+.group-dot {
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    box-shadow: 0 0 8px currentColor;
+}
+
+/* the "how many in this section" number */
+.group-count {
+    font-family: var(--font-body);
+    font-size: 13px;
+    font-weight: 600;
+    background: rgba(255, 255, 255, 0.06);
+    border-radius: 999px;
+    padding: 1px 9px;
+    margin-left: 4px;
+}
+
+
+/* ============================================================
+   COOKIE ROSTER GRID
+   auto-fill means the browser fits as many 150px cards per row as
+   the window allows - so a wide screen shows many more, which is
+   the point of going full width.
+   ============================================================ */
+
+.cookie-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(128px, 1fr));
+    gap: 12px;
+}
+
+.cookie-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    padding: 14px 8px 12px;
+}
+
+.cookie-card-name {
+    font-size: 13px;
+    line-height: 1.2;
+    margin: 8px 0 4px;
+}
+
+.cookie-card-release {
+    margin-top: 8px;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.3px;
+    color: var(--color-text-muted);
+}
+
+
+/* ============================================================
+   COMMUNITY BUILD CARDS
+   The whole card is clickable and opens the full build, so it gets
+   a pointer cursor and a hint line at the bottom.
+   ============================================================ */
+
+.build-card {
+    margin-bottom: 16px;
+    cursor: pointer;
+    position: relative;
+}
+
+.build-card-head {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 6px;
+    flex-wrap: wrap;
+}
+
+.build-card-byline {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 14px;
+}
+
+.build-card-note {
+    margin-top: 12px;
+    color: var(--color-text-body);
+}
+
+.build-card-actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-top: 14px;
+    padding-top: 14px;
+    border-top: 1px solid var(--color-border);
+    cursor: default;
+}
+
+.build-card-hint {
+    display: block;
+    margin-top: 12px;
+    font-size: 12px;
+    color: var(--color-text-muted);
+    opacity: 0;
+    transition: opacity 200ms var(--ease);
+}
+.build-card:hover .build-card-hint,
+.build-card:focus-visible .build-card-hint { opacity: 1; }
+
+/* a private build is dimmed and dashed, so it's obvious at a glance
+   that nobody else can see it */
+.build-card.is-private {
+    border-style: dashed;
+    opacity: 0.82;
+}
+.private-tag { color: var(--color-text-muted); display: inline-flex; align-items: center; gap: 4px; }
+.admin-tag {
+    color: var(--color-rank);
+    border-color: rgba(45, 212, 191, 0.4);
+    display: inline-flex; align-items: center; gap: 4px;
+}
+
+/* a username you can click through to a profile */
+.username-link {
+    color: var(--color-primary);
+    font-weight: 700;
+    text-decoration: none;
+    border-radius: 4px;
+}
+.username-link:hover { color: var(--color-primary-hover); text-decoration: underline; }
+
+/* the danger version of a pill, for Delete / Remove */
+.pill.danger { color: var(--color-enemy); border-color: rgba(239, 68, 68, 0.35); }
+.pill.danger:hover { border-color: var(--color-enemy); background: rgba(239, 68, 68, 0.12); }
+.pill:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+
+
+/* ============================================================
+   PROFILE PAGE
+   ============================================================ */
+
+.profile-header {
+    display: flex;
+    gap: 28px;
+    align-items: flex-start;
+    flex-wrap: wrap;
+}
+
+.profile-picture-block {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+}
+
+.profile-picture {
+    width: 116px;
+    height: 116px;
+    border-radius: 50%;
+    overflow: hidden;
+    background: var(--gradient-primary);
+    box-shadow: var(--glow-primary);
+    border: 2px solid rgba(255, 255, 255, 0.14);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: var(--font-heading);
+    font-size: 44px;
+    color: #fff;
+    flex-shrink: 0;
+}
+/* object-fit: cover fills the circle without squashing the picture */
+.profile-picture img { width: 100%; height: 100%; object-fit: cover; }
+
+.profile-picture-actions {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    justify-content: center;
+    max-width: 200px;
+}
+
+.profile-details { flex: 1; min-width: 260px; }
+
+.profile-name {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.profile-stats {
+    display: flex;
+    gap: 20px;
+    flex-wrap: wrap;
+    margin-top: 16px;
+}
+.profile-stat {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    color: var(--color-text-muted);
+    font-size: 14px;
+}
+.profile-stat strong { color: var(--color-text); font-size: 18px; font-family: var(--font-heading); }
+
+.profile-message {
+    margin-top: 12px;
+    color: var(--color-rank);
+    font-size: 14px;
+    font-weight: 600;
+}
+
+/* the profile link in the top bar */
+.topbar-profile-link {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    color: var(--color-text);
+    text-decoration: none;
+    padding: 4px 10px 4px 4px;
+    border-radius: 999px;
+    transition: background 180ms var(--ease);
+}
+.topbar-profile-link:hover { background: rgba(255, 255, 255, 0.07); }
+
+/* the shared round profile picture (top bar, build cards) */
+.avatar {
+    overflow: hidden;
+    font-family: var(--font-heading);
+    flex-shrink: 0;
+}
+.avatar img { width: 100%; height: 100%; object-fit: cover; }
+
+
+/* ============================================================
+   BUILD DETAIL POPUP
+   Shows everything saved with a build: levels, ascensions,
+   toppings and their bonus stats, tarts, beascuits, treasures.
+   ============================================================ */
+
+.detail-modal {
+    max-width: 1000px;
+    max-height: 88vh;
+    overflow-y: auto;
+}
+
+.detail-byline {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 4px;
+}
+
+.detail-note {
+    margin-top: 14px;
+    padding: 12px 14px;
+    background: var(--color-input);
+    border-left: 3px solid var(--color-primary);
+    border-radius: var(--radius-small);
+}
+
+.detail-section { margin-top: 26px; }
+
+.detail-heading {
+    font-size: 16px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    margin-bottom: 12px;
+}
+
+.detail-cookie-row {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.detail-cookie {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+    width: 108px;
+    padding: 10px 6px;
+    background: var(--color-input);
+    border: 1px solid;
+    border-radius: var(--radius-small);
+    text-align: center;
+}
+.detail-cookie img { object-fit: contain; }
+.detail-cookie-name { font-size: 12px; font-weight: 700; line-height: 1.2; }
+
+.detail-level {
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--color-text);
+}
+
+.detail-stars {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--color-rank);
+}
+
+/* ---- one of your cookies, with its whole build ---- */
+.detail-build-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(330px, 1fr));
+    gap: 12px;
+}
+
+.detail-build {
+    background: var(--color-input);
+    border: 1px solid var(--color-border);
+    border-left: 3px solid var(--color-ally);
+    border-radius: var(--radius-small);
+    padding: 12px 14px;
+}
+
+.detail-build-head {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 10px;
+}
+.detail-build-head img { object-fit: contain; flex-shrink: 0; }
+.detail-build-name { font-family: var(--font-heading); font-size: 15px; }
+.detail-build-sub { display: flex; align-items: center; gap: 10px; margin-top: 3px; }
+
+.detail-gear {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding-top: 10px;
+    border-top: 1px solid var(--color-border);
+}
+
+.detail-gear-block { display: flex; align-items: flex-start; gap: 10px; }
+
+.detail-gear-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    width: 72px;
+    flex-shrink: 0;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.7px;
+    text-transform: uppercase;
+    color: var(--color-text-muted);
+    padding-top: 6px;
+}
+
+.detail-topping-row { display: flex; gap: 6px; flex-wrap: wrap; }
+
+.detail-slot {
+    position: relative;
+    width: 40px;
+    height: 40px;
+    border-radius: var(--radius-small);
+    background: var(--color-card);
+    border: 1px solid var(--color-border);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.detail-slot.empty { border-style: dashed; opacity: 0.45; }
+.detail-slot img { object-fit: contain; }
+
+/* the bonus stats sit in a small popup on hover, so five toppings
+   still fit on one line but the numbers aren't lost */
+.detail-substats {
+    display: none;
+    position: absolute;
+    bottom: calc(100% + 6px);
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 5;
+    background: var(--color-bg-deep);
+    border: 1px solid var(--color-border-strong);
+    border-radius: 8px;
+    padding: 6px 9px;
+    font-size: 11px;
+    font-weight: 600;
+    white-space: nowrap;
+    box-shadow: 0 8px 20px rgba(0,0,0,0.5);
+}
+.detail-substats span { display: block; }
+.detail-slot:hover .detail-substats,
+.detail-beascuit:hover .detail-substats { display: block; }
+
+.detail-beascuit {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    font-weight: 600;
+    padding-top: 5px;
+}
+.detail-beascuit img { object-fit: contain; }
+
+.detail-none { font-size: 13px; padding-top: 7px; }
+
+.detail-treasures { margin-top: 14px; }
+/* the treasures label sits on its own line, so it doesn't need the
+   fixed width that keeps the per-cookie gear labels lined up */
+.detail-treasures .detail-gear-label { width: auto; padding-top: 0; }
+.detail-treasure-row { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 6px; }
+
+.detail-treasure {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 12px 6px 6px;
+    background: var(--color-input);
+    border: 1px solid var(--color-border);
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 600;
+}
+.detail-treasure img { object-fit: contain; }
+
+
+/* ---- mobile: the profile and detail popup stack up ---- */
+@media (max-width: 767px) {
+    .content { padding: 20px 16px 32px; }
+    .profile-header { gap: 18px; }
+    .profile-picture { width: 92px; height: 92px; font-size: 34px; }
+    /* a 30-character username at the desktop size overflows a phone */
+    .profile-name { font-size: 24px; }
+    .sort-controls { width: 100%; }
+    .sort-select { flex: 1; min-width: 0; }
+    .detail-build-list { grid-template-columns: 1fr; }
+    .detail-gear-block { flex-direction: column; gap: 4px; }
+    .detail-gear-label { width: auto; padding-top: 0; }
 }

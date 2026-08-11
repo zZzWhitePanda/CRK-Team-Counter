@@ -31,6 +31,7 @@ export interface Cookie {
     position: string;
     rarity: string;
     image_file: string;
+    release_date: string | null;   // 'YYYY-MM-DD' - powers the release-order sort
 }
 
 export type GearSetup = Record<string, string>;
@@ -47,12 +48,19 @@ export interface MetaTeam {
 export interface PlayerBuild {
     build_id: number;
     username: string;
+    avatar?: string | null;        // the author's cookie-portrait avatar
+    avatar_data?: string | null;   // or their uploaded picture
     opponent_team: string[];
     counter_team: string[];
-    gear_setup: GearSetup | null;
+    // gear_setup holds the whole rich build (toppings, beascuits,
+    // treasures, enemy levels…) as free-form JSON - see BuildDetails
+    // in buildDetails.ts for the shape the submit form writes.
+    gear_setup: unknown;
     note: string | null;
     likes: number;
     likedByMe?: boolean;   // only set when logged in
+    is_public?: boolean;
+    created_at?: string;
     score?: number;
 }
 
@@ -66,6 +74,21 @@ export interface AuthUser {
     username: string;
     email: string;
     isAdmin: boolean;
+    avatar: string | null;       // a cookie portrait filename
+    avatarData: string | null;   // or an uploaded picture, as a data URI
+}
+
+// someone's public profile (anyone can view anyone's)
+export interface Profile {
+    userId: number;
+    username: string;
+    avatar: string | null;
+    avatarData: string | null;
+    isAdmin: boolean;
+    createdAt: string;
+    isMe: boolean;         // true when you're looking at your own profile
+    buildCount: number;
+    totalLikes: number;
 }
 
 // ---- helper: fetch + throw a readable error if it failed ------
@@ -98,14 +121,17 @@ async function getJson<T>(url: string, options: RequestInit = {}): Promise<T> {
     return body as T;
 }
 
-// small helper for POSTing JSON
-function postJson<T>(url: string, data: unknown): Promise<T> {
+// small helpers for sending JSON. POST creates, PATCH changes part
+// of something that already exists, DELETE removes it.
+function sendJson<T>(method: string, url: string, data: unknown): Promise<T> {
     return getJson<T>(url, {
-        method: 'POST',
+        method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),
     });
 }
+const postJson = <T,>(url: string, data: unknown) => sendJson<T>('POST', url, data);
+const patchJson = <T,>(url: string, data: unknown) => sendJson<T>('PATCH', url, data);
 
 // ---- cookies --------------------------------------------------
 
@@ -163,7 +189,56 @@ export function getMe() {
     return getJson<{ user: AuthUser }>('/api/auth/me');
 }
 
+// ---- profiles -------------------------------------------------
+
+// PATCH /api/auth/me - change your username and/or profile picture.
+// Send only what you're changing. avatar = a cookie portrait
+// filename, avatarData = an uploaded picture as a data URI; setting
+// one clears the other. The backend returns a fresh token because
+// the username is stored inside it.
+export function updateProfile(changes: {
+    username?: string;
+    avatar?: string | null;
+    avatarData?: string | null;
+}) {
+    return patchJson<{ token: string; user: AuthUser }>('/api/auth/me', changes);
+}
+
+// GET /api/users/:username - anyone's profile plus their builds.
+// Works logged out; your own private builds only appear for you.
+export function getProfile(username: string) {
+    return getJson<{ profile: Profile; builds: PlayerBuild[] }>(
+        '/api/users/' + encodeURIComponent(username));
+}
+
+// PATCH /api/builds/:id - show a build to everyone, or hide it (owner only)
+export function setBuildPrivacy(buildId: number, isPublic: boolean) {
+    return patchJson<{ build_id: number; is_public: boolean }>(
+        `/api/builds/${buildId}`, { isPublic });
+}
+
+// DELETE /api/builds/:id - remove one of your own builds
+export function deleteBuild(buildId: number) {
+    return getJson<{ deleted: number }>(`/api/builds/${buildId}`, { method: 'DELETE' });
+}
+
+// ---- picture helpers ------------------------------------------
+
 // where a cookie's portrait lives (served by the backend)
 export function cookieImageUrl(imageFile: string) {
     return API_BASE + '/images/cookies/' + imageFile;
+}
+
+// Works out what to show as someone's profile picture:
+// an uploaded picture wins, then a chosen cookie portrait, then
+// null (the Avatar component falls back to their initial).
+export function avatarUrl(
+    who: { avatar?: string | null; avatarData?: string | null;
+           avatar_data?: string | null } | null | undefined
+): string | null {
+    if (!who) return null;
+    const uploaded = who.avatarData ?? who.avatar_data;
+    if (uploaded) return uploaded;                       // already a data: URI
+    if (who.avatar) return cookieImageUrl(who.avatar);
+    return null;
 }

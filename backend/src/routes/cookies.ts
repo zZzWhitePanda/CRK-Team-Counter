@@ -40,8 +40,14 @@ cookiesRouter.get('/', async (req: Request, res: Response) => {
 
         const where = conditions.length > 0 ? 'WHERE ' + conditions.join(' AND ') : '';
 
+        // release_date is sent as plain text (TO_CHAR) rather than a
+        // real date, because JSON has no date type - without this the
+        // driver hands back a JS Date that gets shifted by the
+        // timezone on the way out, which can move a cookie's release
+        // to the day before.
         const result = await query(
-            `SELECT cookie_id, name, type, position, rarity, image_file
+            `SELECT cookie_id, name, type, position, rarity, image_file,
+                    TO_CHAR(release_date, 'YYYY-MM-DD') AS release_date
              FROM cookies
              ${where}
              ORDER BY name`,

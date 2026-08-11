@@ -9,6 +9,11 @@
 import { NavLink } from 'react-router-dom';
 import { Gem, Swords, CircleUserRound, Settings } from 'lucide-react';
 
+// Shadow Milk Cookie sits faded behind the site name, the way
+// paimon.moe puts a character behind its logo. It's decorative
+// only, so it's aria-hidden and the alt text is empty.
+const HERO_IMAGE = (import.meta.env.VITE_API_URL ?? '') + '/images/brand/shadow-milk-hero.png';
+
 // the 4 pages, matching the mockup order and icons
 const links = [
     { to: '/builds', label: 'Community Builds', icon: Gem },
@@ -21,8 +26,11 @@ export function Sidebar() {
     return (
         <nav className="sidebar" aria-label="Main navigation">
             <div className="sidebar-logo">
-                CRK
-                <small>Team Builder</small>
+                <img className="sidebar-hero" src={HERO_IMAGE} alt="" aria-hidden="true" />
+                <span className="sidebar-logo-text">
+                    CRK
+                    <small>Team Builder</small>
+                </span>
             </div>
 
             {links.map(({ to, label, icon: Icon }) => (

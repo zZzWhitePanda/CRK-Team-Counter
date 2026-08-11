@@ -24,7 +24,10 @@ const PORT = Number(process.env.PORT) || 4000;
 
 // ---- Middleware (runs before every route) ----
 app.use(cors());          // lets the React dev site (different port) call this API
-app.use(express.json());  // turns JSON request bodies into req.body
+// turns JSON request bodies into req.body. The limit is raised from
+// Express's default 100kb because uploading a profile picture sends
+// the image inside the JSON; the route itself caps it at 200 KB.
+app.use(express.json({ limit: '1mb' }));
 
 // ---- Routes ----
 app.use('/api/cookies', cookiesRouter);
@@ -45,6 +48,10 @@ app.use('/images/toppings', assets('topping-images'));
 app.use('/images/beascuits', assets('beascuit-images'));
 app.use('/images/ascension', assets('ascension-images'));
 app.use('/images/treasures', assets('treasure-images'));
+// artwork used for the site's own look, not game data:
+//   GET /images/brand/shadow-milk-hero.png   (the faded character
+//                                             behind the site name)
+app.use('/images/brand', assets('brand'));
 
 // quick way to check the server is alive (and that the DB name
 // loaded from .env) - handy when deploying to Railway later

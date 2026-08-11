@@ -12,7 +12,7 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import {
     AuthUser, getToken, setToken, clearToken,
-    getMe, login as apiLogin, signup as apiSignup,
+    getMe, login as apiLogin, signup as apiSignup, updateProfile,
 } from './api';
 
 interface AuthState {
@@ -21,6 +21,14 @@ interface AuthState {
     login: (email: string, password: string) => Promise<void>;
     signup: (username: string, email: string, password: string) => Promise<void>;
     logout: () => void;
+    // used by the profile page to change your username / picture.
+    // It lives here (not in the page) so the name and picture in the
+    // top bar update straight away, without a refresh.
+    saveProfile: (changes: {
+        username?: string;
+        avatar?: string | null;
+        avatarData?: string | null;
+    }) => Promise<AuthUser>;
 }
 
 const AuthContext = createContext<AuthState | null>(null);
@@ -55,8 +63,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setUser(null);
     }
 
+    async function saveProfile(changes: {
+        username?: string; avatar?: string | null; avatarData?: string | null;
+    }) {
+        const res = await updateProfile(changes);
+        // the username is baked into the login token, so a rename
+        // hands back a new one that has to replace the old
+        setToken(res.token);
+        setUser(res.user);
+        return res.user;
+    }
+
     return (
-        <AuthContext.Provider value={{ user, loading, login, signup, logout }}>
+        <AuthContext.Provider value={{ user, loading, login, signup, logout, saveProfile }}>
             {children}
         </AuthContext.Provider>
     );

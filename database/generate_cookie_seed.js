@@ -49,12 +49,15 @@ let sql = `-- ============================================================
 
 TRUNCATE cookies RESTART IDENTITY CASCADE;
 
-INSERT INTO cookies (name, type, position, rarity, image_file) VALUES
+INSERT INTO cookies (name, type, position, rarity, image_file, release_date) VALUES
 `;
 
 const rows = cookies.map(c =>
     `(${sqlString(c.name)}, ${sqlString(c.type)}, ${sqlString(c.position)}, ` +
-    `${sqlString(c.rarity)}, ${sqlString(imageFileName(c.name))})`
+    `${sqlString(c.rarity)}, ${sqlString(imageFileName(c.name))}, ` +
+    // release comes from the wiki infobox's releasedate field; NULL
+    // for anything the scrape couldn't find, so the sort still works
+    `${c.release ? sqlString(c.release) : 'NULL'})`
 );
 
 sql += rows.join(',\n') + ';\n';

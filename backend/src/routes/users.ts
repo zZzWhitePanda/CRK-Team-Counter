@@ -22,7 +22,7 @@ usersRouter.get('/:username', optionalAuth, async (req: Request, res: Response) 
         const username = String(req.params.username);
 
         const userResult = await query(
-            `SELECT user_id, username, avatar, is_admin, created_at
+            `SELECT user_id, username, avatar, avatar_data, is_admin, created_at
              FROM users WHERE LOWER(username) = LOWER($1)`,
             [username]
         );
@@ -37,7 +37,7 @@ usersRouter.get('/:username', optionalAuth, async (req: Request, res: Response) 
         const isMe = req.user?.userId === profile.user_id;
 
         const buildsResult = await query(
-            `SELECT b.build_id, u.username, u.avatar, b.opponent_team, b.counter_team,
+            `SELECT b.build_id, u.username, u.avatar, u.avatar_data, b.opponent_team, b.counter_team,
                     b.gear_setup, b.note, b.likes, b.is_public, b.created_at
              FROM user_builds b
              JOIN users u ON u.user_id = b.user_id
@@ -68,6 +68,7 @@ usersRouter.get('/:username', optionalAuth, async (req: Request, res: Response) 
                 userId: profile.user_id,
                 username: profile.username,
                 avatar: profile.avatar,
+                avatarData: profile.avatar_data,
                 isAdmin: profile.is_admin,
                 createdAt: profile.created_at,
                 isMe,

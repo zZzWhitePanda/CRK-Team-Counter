@@ -19,10 +19,18 @@ interface CookiePickerProps {
     disabledNames: string[];         // cookies already picked elsewhere
     onPick: (name: string) => void;
     onClear: () => void;
+    // Normally this component draws a team slot that opens the popup
+    // when clicked. startOpen skips the slot and shows just the popup,
+    // so the profile page can re-use it as a plain cookie chooser for
+    // picking a profile picture.
+    startOpen?: boolean;
+    onClose?: () => void;
 }
 
-export function CookiePicker({ roster, selectedName, disabledNames, onPick, onClear }: CookiePickerProps) {
-    const [open, setOpen] = useState(false);
+export function CookiePicker({
+    roster, selectedName, disabledNames, onPick, onClear, startOpen, onClose,
+}: CookiePickerProps) {
+    const [open, setOpen] = useState(startOpen === true);
     const [search, setSearch] = useState('');
     // default = rarity, ascending (Common -> highest rarity)
     const [sortField, setSortField] = useState<SortField>('rarity');
@@ -41,10 +49,17 @@ export function CookiePicker({ roster, selectedName, disabledNames, onPick, onCl
 
     const nResults = groups.reduce((n, g) => n + g.cookies.length, 0);
 
+    // closing has to tell the parent too when we're being used as a
+    // standalone chooser, otherwise it would re-open us straight away
+    function close() {
+        setOpen(false);
+        onClose?.();
+    }
+
     return (
         <>
-            {/* ---- the slot button ---- */}
-            {selected ? (
+            {/* ---- the slot button (not shown in standalone mode) ---- */}
+            {startOpen ? null : selected ? (
                 <div className="picker-slot filled" style={{ borderColor: rarityColor(selected.rarity) }}>
                     <button className="picker-slot-main" onClick={() => setOpen(true)} title="Change cookie">
                         <img src={cookieImageUrl(selected.image_file)} alt={selected.name} width={44} height={44} loading="lazy" />
@@ -63,9 +78,9 @@ export function CookiePicker({ roster, selectedName, disabledNames, onPick, onCl
 
             {/* ---- the picker popup ---- */}
             {open && (
-                <div className="modal-backdrop" onClick={() => setOpen(false)}>
+                <div className="modal-backdrop" onClick={close}>
                     <div className="modal-card picker-modal" onClick={e => e.stopPropagation()}>
-                        <button className="modal-close" onClick={() => setOpen(false)} aria-label="Close">
+                        <button className="modal-close" onClick={close} aria-label="Close">
                             <X size={20} />
                         </button>
                         <h2 style={{ marginBottom: 14 }}>

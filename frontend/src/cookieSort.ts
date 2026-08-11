@@ -24,11 +24,13 @@ export const TYPES = [
 ];
 export const POSITIONS = ['Front', 'Middle', 'Rear'];
 
-// the options in the "Sort by" drop-down
-export type SortField = 'rarity' | 'name' | 'type' | 'position';
+// the options in the "Sort by" drop-down. Rarity is the default
+// everywhere, because that's how players think about the roster.
+export type SortField = 'rarity' | 'release' | 'name' | 'type' | 'position';
 
 export const SORT_OPTIONS: { value: SortField; label: string }[] = [
     { value: 'rarity', label: 'Rarity' },
+    { value: 'release', label: 'Release order' },
     { value: 'name', label: 'Name' },
     { value: 'type', label: 'Type' },
     { value: 'position', label: 'Position' },
@@ -65,6 +67,32 @@ export function groupCookies(
         return [{ key: '', cookies: list }];
     }
 
+    // --- release order: a section per YEAR, oldest first ---
+    // Inside a year the cookies stay in the order they came out,
+    // which is the whole point of this sort. Anything with no date
+    // (shouldn't happen - all 190 have one) is parked at the end.
+    if (field === 'release') {
+        const dated = cookies.filter(c => c.release_date);
+        const undated = cookies.filter(c => !c.release_date);
+
+        dated.sort((a, b) => {
+            const diff = a.release_date!.localeCompare(b.release_date!);
+            // same day (a batch launch) - fall back to A-Z so the
+            // order doesn't jump around between page loads
+            return (ascending ? diff : -diff) || byName(a, b);
+        });
+
+        const years: CookieGroup[] = [];
+        for (const cookie of dated) {
+            const year = cookie.release_date!.slice(0, 4);
+            const last = years[years.length - 1];
+            if (last && last.key === year) last.cookies.push(cookie);
+            else years.push({ key: year, cookies: [cookie] });
+        }
+        if (undated.length > 0) years.push({ key: 'Unknown', cookies: undated });
+        return years;
+    }
+
     // --- everything else: one section per group ---
     // the order the sections appear in
     const order = field === 'rarity' ? RARITIES
@@ -85,6 +113,17 @@ export function groupCookies(
 // the little label under the direction button, e.g. "Common → Beast"
 export function directionLabel(field: SortField, ascending: boolean): string {
     if (field === 'name') return ascending ? 'A → Z' : 'Z → A';
-    if (field === 'rarity') return ascending ? 'Common → Beast' : 'Beast → Common';
+    if (field === 'rarity') return ascending ? 'Common → Witch' : 'Witch → Common';
+    if (field === 'release') return ascending ? 'Oldest → Newest' : 'Newest → Oldest';
     return ascending ? 'First → Last' : 'Last → First';
+}
+
+// "15 January 2025" - how a release date is shown on a cookie card
+export function formatRelease(date: string | null): string {
+    if (!date) return 'Release date unknown';
+    const [y, m, d] = date.split('-').map(Number);
+    // built from the parts rather than new Date(date) so the browser's
+    // timezone can't shift it to the day before
+    return new Date(y, m - 1, d).toLocaleDateString('en-AU',
+        { day: 'numeric', month: 'long', year: 'numeric' });
 }

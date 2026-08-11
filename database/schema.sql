@@ -32,11 +32,20 @@ CREATE TABLE users (
     email         VARCHAR(255) UNIQUE NOT NULL, -- used to log in
     password_hash VARCHAR(255) NOT NULL,        -- hashed password, never plain text
     is_admin      BOOLEAN DEFAULT FALSE,        -- TRUE = can edit meta_teams
-    -- profile picture: the filename of a COOKIE portrait (e.g.
-    -- 'shadow-milk-cookie.png'). Using a cookie as the avatar fits
-    -- the game and needs no file uploads - important because the
-    -- free hosting wipes uploaded files when the server restarts.
+    -- profile picture, option 1: the filename of a COOKIE portrait
+    -- (e.g. 'shadow-milk-cookie.png') picked from the roster.
     avatar        VARCHAR(100),
+    -- profile picture, option 2: a picture the user uploaded, stored
+    -- as a data URI ('data:image/jpeg;base64,...').
+    --
+    -- Storing the image IN the database looks odd at first, but it is
+    -- the right call here: the free Render hosting wipes the server's
+    -- disk every time it restarts, so an uploaded FILE would silently
+    -- disappear. The browser shrinks every upload to 128x128 and
+    -- re-compresses it before sending, so a row is only ~15 KB.
+    -- TEXT (not VARCHAR(n)) because the length varies; the backend
+    -- rejects anything over 200 KB.
+    avatar_data   TEXT,
     created_at    TIMESTAMP DEFAULT NOW()
 );
 
@@ -60,6 +69,10 @@ CREATE TABLE cookies (
     position   VARCHAR(10) NOT NULL,         -- Front, Middle or Rear
     rarity     VARCHAR(20) NOT NULL,         -- Common up to Beast
     image_file VARCHAR(100),                 -- portrait in assets/cookie-images/
+    -- the day the cookie was added to the game. This powers the
+    -- "Release order" option in the roster's Sort by menu, which
+    -- groups the cookies by the year they came out.
+    release_date DATE,
 
     -- CHECK rules so bad data can't sneak in - Postgres rejects
     -- any row where these are not one of the allowed values.

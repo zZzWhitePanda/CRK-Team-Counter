@@ -12,7 +12,7 @@ import { Search } from 'lucide-react';
 import { Cookie, getCookies, cookieImageUrl } from '../api';
 import { SortControls } from '../components/SortControls';
 import {
-    SortField, TYPES, RARITIES, groupCookies, rarityColor,
+    SortField, TYPES, RARITIES, groupCookies, rarityColor, formatRelease,
 } from '../cookieSort';
 
 // re-exported so older imports of rarityColor keep working
@@ -128,7 +128,7 @@ export function CookiesPage() {
                                 <div key={cookie.cookie_id} className="card card-interactive cookie-card"
                                     style={{ borderTop: `2px solid ${accent}` }}>
                                     <img src={cookieImageUrl(cookie.image_file)} alt={cookie.name}
-                                        width={96} height={96} loading="lazy"
+                                        width={76} height={76} loading="lazy"
                                         style={{ objectFit: 'contain', filter: 'drop-shadow(0 4px 8px rgba(0,0,0,0.35))' }} />
                                     <h3 className="cookie-card-name">{cookie.name}</h3>
                                     <div style={{ color: accent, fontSize: 12, fontWeight: 700, letterSpacing: 0.5, marginBottom: 8 }}>
@@ -138,6 +138,13 @@ export function CookiesPage() {
                                         <span className="tag">{cookie.type}</span>
                                         <span className="tag">{cookie.position}</span>
                                     </div>
+                                    {/* the release date only earns its space when
+                                        that's what you're sorting by */}
+                                    {sortField === 'release' && (
+                                        <div className="cookie-card-release">
+                                            {formatRelease(cookie.release_date)}
+                                        </div>
+                                    )}
                                 </div>
                             );
                         })}
