@@ -15,7 +15,7 @@ import { Gem } from 'lucide-react';
 import { Cookie, cookieImageUrl } from '../api';
 import {
     CookieBuild, TeamTreasures, TOPPINGS, BEASCUITS, TREASURES,
-    toppingImageUrl, beascuitImageUrl, treasureImageUrl, tartBoardUrl,
+    toppingImageUrl, beascuitImageUrl, treasureImageUrl, toppingBoardUrl,
 } from '../gear';
 import { LevellingBadges } from './LevellingPicker';
 
@@ -129,7 +129,7 @@ function OverviewCard({ name, cookie, build, onEdit }: {
                     <span className="overview-board" title={
                         tart ? `${tart.name} Tart` : 'No Topping Tart'
                     }>
-                        <img className="overview-board-star" src={tartBoardUrl(build?.tart ?? null)} alt="" />
+                        <img className="overview-board-star" src={toppingBoardUrl(build?.tart ?? null)} alt="" />
                     </span>
 
                     <div className="overview-gear-right">

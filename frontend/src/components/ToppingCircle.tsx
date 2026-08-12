@@ -1,24 +1,26 @@
 // ============================================================
-// ToppingCircle.tsx - the in-game topping screen.
+// ToppingCircle.tsx - the in-game topping board.
 //
-// Cookie Run: Kingdom shows toppings on a STAR-shaped board with
-// one slot per point, and the board itself is re-skinned by
-// whichever Topping Tart is equipped (no tart = a plain dark
-// star, a raspberry tart turns it red, and so on).
+// Cookie Run: Kingdom lays toppings out on a star-shaped board
+// with one topping sitting INSIDE each of the star's five wedges,
+// and the equipped Topping Tart forms the jewelled frame behind
+// it. This reproduces that.
 //
-// This copies that. The board images are the game's own art,
-// pulled from the wiki (assets/tart-board/<flavour>.png), and
-// the five slots are positioned over the star's points.
+// The board art is the game's own, taken from the wiki:
+//   Topping tart base.png        -> topping-board/none.png
+//   Topping tart <flavour> 3.png -> topping-board/<flavour>.png
+// at 272px, which is the size the game's own UI uses.
 //
-// An empty slot is a dashed outline; click it to pick a topping
-// and set its sub-stats. Click a filled one to change or remove.
+// The five slots are placed at 72-degree intervals starting at
+// the top, at a radius that lands them in the middle of each
+// wedge rather than floating in a ring outside the star.
 // ============================================================
 
 import { useState } from 'react';
 import { X, Plus, Trash2 } from 'lucide-react';
 import {
     TOPPINGS, TOPPING_SUBSTATS, ToppingSlot, SubStat,
-    toppingImageUrl, tartBoardUrl,
+    toppingImageUrl, toppingBoardUrl,
 } from '../gear';
 
 interface ToppingCircleProps {
@@ -27,17 +29,22 @@ interface ToppingCircleProps {
     onChange: (slots: (ToppingSlot | null)[]) => void;
 }
 
-// Where each of the 5 slots sits. A five-pointed star has a point
-// every 72 degrees starting at the top, which is exactly where the
-// game puts its topping slots.
-const BOX = 300;                          // board container size (px)
-const RADIUS = 112;                       // how far slots sit from centre
-const SLOT = 58;                          // slot size
+// The board is square-ish, so everything is sized as a FRACTION of
+// the container. That way the whole thing scales to one CSS
+// variable and still lines up on a phone.
+//
+// WEDGE_RADIUS is how far out from the centre each topping sits,
+// as a fraction of the board's width. Tuned against the game's own
+// screenshots: much smaller and the toppings bunch up over the
+// middle of the star, much larger and they slide off its points.
+const WEDGE_RADIUS = 0.305;
+
 function slotPosition(i: number) {
     const angle = (-90 + i * 72) * (Math.PI / 180);   // degrees -> radians
     return {
-        left: BOX / 2 + RADIUS * Math.cos(angle) - SLOT / 2,
-        top: BOX / 2 + RADIUS * Math.sin(angle) - SLOT / 2,
+        // percentages, so the board can be any size
+        left: `${50 + WEDGE_RADIUS * 100 * Math.cos(angle)}%`,
+        top: `${50 + WEDGE_RADIUS * 100 * Math.sin(angle)}%`,
     };
 }
 
@@ -52,35 +59,37 @@ export function ToppingCircle({ slots, tart, onChange }: ToppingCircleProps) {
     }
 
     const filled = slots.filter(Boolean).length;
+    const tartName = tart ? TOPPINGS.find(t => t.key === tart)?.name : null;
 
     return (
-        <div>
-            <div className="topping-board" style={{ width: BOX, height: BOX }}>
-                {/* The star board. Its artwork changes with the tart,
-                    the same way it does in game. */}
+        <div className="topping-board-wrap">
+            <div className={'topping-board' + (filled === 5 ? ' complete' : '')}>
+                {/* The star board. Its artwork already includes the
+                    tart's jewelled frame, so swapping the tart swaps
+                    the whole board - exactly like the game does. */}
                 <img
-                    className={'topping-board-star' + (filled === 5 ? ' complete' : '')}
-                    src={tartBoardUrl(tart)}
-                    alt={tart ? `${tart} Topping Tart equipped` : 'No Topping Tart equipped'}
+                    className="topping-board-art"
+                    src={toppingBoardUrl(tart)}
+                    alt={tartName ? `${tartName} Topping Tart equipped` : 'No Topping Tart equipped'}
                 />
 
-                {/* the 5 slots around it */}
+                {/* one topping sitting in each of the five wedges */}
                 {slots.map((slot, i) => {
                     const pos = slotPosition(i);
                     const topping = slot ? TOPPINGS.find(t => t.key === slot.toppingKey) : null;
                     return (
                         <button
                             key={i}
-                            className={'topping-slot-ring' + (slot ? ' filled' : '')}
-                            style={{ left: pos.left, top: pos.top, width: SLOT, height: SLOT }}
+                            className={'topping-wedge' + (slot ? ' filled' : '')}
+                            style={pos}
                             onClick={() => setEditing(i)}
-                            title={topping ? topping.name : 'Empty — click to add a topping'}
+                            title={topping ? topping.name : 'Empty slot — click to add a topping'}
+                            aria-label={topping ? `${topping.name}, click to change` : 'Empty topping slot'}
                         >
                             {slot ? (
-                                <img src={toppingImageUrl(slot.toppingKey, slot.isTart)}
-                                     alt="" width={40} height={40} />
+                                <img src={toppingImageUrl(slot.toppingKey, slot.isTart)} alt="" />
                             ) : (
-                                <Plus size={20} aria-hidden="true" />
+                                <Plus size={18} aria-hidden="true" />
                             )}
                         </button>
                     );
@@ -88,8 +97,7 @@ export function ToppingCircle({ slots, tart, onChange }: ToppingCircleProps) {
             </div>
 
             <p className="muted topping-board-count">
-                {filled} of 5 toppings
-                {tart && ` · ${TOPPINGS.find(t => t.key === tart)?.name ?? tart} Tart`}
+                {filled} of 5 toppings{tartName && ` · ${tartName} Tart`}
             </p>
 
             {editing !== null && (
@@ -139,7 +147,7 @@ function ToppingSlotEditor({ slot, onSave, onRemove, onClose }: {
 
                 {step === 'pick' && (
                     <>
-                        <h2 style={{ marginBottom: 12 }}>Choose a topping</h2>
+                        <h2 style={{ marginBottom: 12, paddingRight: 36 }}>Choose a topping</h2>
                         <div className="picker-scroll">
                             <div className="picker-grid">
                                 {TOPPINGS.map(t => (
@@ -156,7 +164,7 @@ function ToppingSlotEditor({ slot, onSave, onRemove, onClose }: {
 
                 {step === 'stats' && (
                     <>
-                        <h2 style={{ marginBottom: 12 }}>Topping sub-stats</h2>
+                        <h2 style={{ marginBottom: 12, paddingRight: 36 }}>Topping sub-stats</h2>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 18 }}>
                             <img src={toppingImageUrl(toppingKey, isTart)} alt="" width={64} height={64} />
                             <div>

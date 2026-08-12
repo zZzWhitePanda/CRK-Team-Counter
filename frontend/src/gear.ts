@@ -239,13 +239,15 @@ export function awakeningImageUrl(style: 'ancient' | 'beast', level: number) {
 }
 
 /**
- * The star-shaped topping board. In game the board itself changes
- * to match the equipped Topping Tart - no tart is a plain dark
- * star, a raspberry tart makes it red, and so on. Pass null for
- * "no tart".
+ * The star-shaped topping board the toppings sit in.
+ *
+ * The game bakes the equipped Topping Tart's jewelled frame into
+ * the board art, so swapping the tart swaps the whole picture -
+ * no tart is a plain cookie star, a raspberry tart adds the red
+ * frame, and so on. Pass null for "no tart".
  */
-export function tartBoardUrl(tartKey: string | null) {
-    return `${API_BASE}/images/tart-board/${tartKey ?? 'none'}.png`;
+export function toppingBoardUrl(tartKey: string | null) {
+    return `${API_BASE}/images/topping-board/${tartKey ?? 'none'}.png`;
 }
 export function treasureImageUrl(key: string) {
     return `${API_BASE}/images/treasures/${key}.png`;

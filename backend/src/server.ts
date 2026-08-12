@@ -64,9 +64,9 @@ app.use('/images/beascuits', assets('beascuit-images'));
 app.use('/images/ascension', assets('ascension-images'));
 app.use('/images/treasures', assets('treasure-images'));
 //   GET /images/awakening/ancient-3.png   (Ancient/Beast awakening banners)
-//   GET /images/tart-board/raspberry.png  (the star-shaped topping board)
+//   GET /images/topping-board/raspberry.png (the star topping board)
 app.use('/images/awakening', assets('awakening-images'));
-app.use('/images/tart-board', assets('tart-board'));
+app.use('/images/topping-board', assets('topping-board'));
 // artwork used for the site's own look, not game data:
 //   GET /images/brand/shadow-milk-hero.png   (the faded character
 //                                             behind the site name)

@@ -581,7 +581,17 @@ h3 { font-size: 18px; }
     flex: 1;
     min-height: 0;
     overflow-y: auto;
-    padding-right: 4px;
+    /* Padding on BOTH sides. The group heading's coloured dot has a
+       glow (box-shadow) that spills outside its box - with no left
+       padding the scroll container clipped it, which is what made
+       the rarity dots look chopped in half. The right side needs
+       room for the scrollbar. */
+    /* 12px clears the dot's 8px glow completely. Note you cannot
+       fix this with overflow-x: visible - setting overflow-y to
+       auto forces the other axis to clip too, so the only real
+       answer is to leave room. */
+    padding-inline: 12px 10px;
+    padding-top: 4px;
 }
 
 .picker-grid {
@@ -699,7 +709,9 @@ h3 { font-size: 18px; }
 }
 .build-button:hover { border-color: var(--color-ally); color: var(--color-text); }
 
-.build-editor { max-width: 560px; max-height: 88vh; overflow-y: auto; }
+/* Wide enough that the six ascension banners sit on one line and
+   the topping board isn't cramped. */
+.build-editor { max-width: 680px; max-height: 88vh; overflow-y: auto; }
 .build-row { display: flex; gap: 24px; align-items: flex-start; flex-wrap: wrap; }
 
 /* ascension star buttons */
@@ -716,34 +728,7 @@ h3 { font-size: 18px; }
 .ascension-btn.active { border-color: var(--color-primary); box-shadow: 0 0 0 2px rgba(139,124,246,0.3); background: var(--color-card-hover); }
 
 /* the in-game topping circle */
-.topping-circle {
-    position: relative;
-    margin: 8px auto;
-}
-.topping-circle-center {
-    position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
-    width: 140px; height: 140px; border-radius: 50%;
-    background: radial-gradient(circle at 50% 35%, rgba(139,124,246,0.22), rgba(18,21,43,0.6) 70%);
-    border: 1px solid var(--color-border);
-    display: flex; align-items: center; justify-content: center;
-}
-.topping-circle-center img { object-fit: contain; filter: drop-shadow(0 4px 10px rgba(0,0,0,0.5)); }
 
-.topping-slot-ring {
-    position: absolute;
-    border-radius: 50%;
-    border: 2px dashed var(--color-border-strong);
-    background: rgba(18,21,43,0.85);
-    color: var(--color-text-muted);
-    display: flex; align-items: center; justify-content: center;
-    cursor: pointer;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.4);
-    transition: transform 160ms var(--ease-bounce), border-color 160ms var(--ease), background 160ms var(--ease);
-}
-.topping-slot-ring:hover { transform: scale(1.12); border-color: var(--color-primary); color: var(--color-text); }
-.topping-slot-ring:active { transform: scale(0.95); }
-.topping-slot-ring.filled { border-style: solid; border-color: var(--color-primary); background: var(--color-card); }
-.topping-slot-ring img { object-fit: contain; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.4)); }
 
 /* beascuit selector */
 .beascuit-current {
@@ -938,7 +923,10 @@ h3 { font-size: 18px; }
    the point of going full width.
    ============================================================ */
 
+/* a touch of padding so a card's hover-lift and coloured edge
+   aren't clipped by whatever is scrolling around it */
 .cookie-grid {
+    padding: 2px;
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(128px, 1fr));
     gap: 12px;
@@ -1872,44 +1860,88 @@ input[type="number"] {
 
 /* ============================================================
    TOPPING BOARD - the in-game star
-   The board artwork is the game's own (assets/tart-board/) and
-   changes with the equipped Topping Tart, exactly like in game.
-   The 5 slots are absolutely positioned over the star's points
-   by ToppingCircle.tsx.
+   The artwork is the game's own (assets/topping-board/, taken
+   from the wiki at 272px). The tart's jewelled frame is baked
+   into each flavour's image, so swapping the tart swaps the
+   whole board exactly as the game does.
+
+   The five toppings sit INSIDE the star's wedges - they are not
+   a ring of buttons around the outside. ToppingCircle.tsx places
+   them with percentages so the board scales as one unit.
    ============================================================ */
+.topping-board-wrap { display: flex; flex-direction: column; align-items: center; }
+
 .topping-board {
     position: relative;
-    margin: 0 auto;
+    /* one number controls the whole thing */
+    width: min(320px, 78vw);
+    aspect-ratio: 1;
 }
 
-.topping-board-star {
+.topping-board-art {
     position: absolute;
-    /* centred in the box and sized to sit just inside the ring of
-       slots, so the slots overlap the star's points like in game */
-    left: 50%;
-    top: 50%;
-    width: 62%;
-    height: 62%;
-    transform: translate(-50%, -50%);
+    inset: 0;
+    width: 100%;
+    height: 100%;
     object-fit: contain;
-    /* the source art is a small inventory icon, so a soft shadow
-       keeps it from looking flat when scaled up */
-    filter: drop-shadow(0 6px 14px rgba(0, 0, 0, 0.45));
     pointer-events: none;
+    filter: drop-shadow(0 8px 18px rgba(0, 0, 0, 0.4));
     transition: filter 300ms var(--ease);
 }
-/* a full set of 5 toppings gets a glow, the way the game
-   celebrates a completed board */
-.topping-board-star.complete {
-    filter: drop-shadow(0 6px 14px rgba(0, 0, 0, 0.45))
-            drop-shadow(0 0 18px color-mix(in srgb, var(--color-primary) 70%, transparent));
+/* a full set of five gets a glow, the way the game celebrates a
+   completed board */
+.topping-board.complete .topping-board-art {
+    filter: drop-shadow(0 8px 18px rgba(0, 0, 0, 0.4))
+            drop-shadow(0 0 20px color-mix(in srgb, var(--color-primary) 65%, transparent));
+}
+
+/* One topping sitting in a wedge. transform centres it on the
+   point ToppingCircle.tsx calculated. No heavy ring or card -
+   the topping just sits on the board like it does in game. */
+.topping-wedge {
+    position: absolute;
+    transform: translate(-50%, -50%);
+    width: 23.5%;
+    aspect-ratio: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    border: none;
+    border-radius: 50%;
+    background: none;
+    color: rgba(255, 255, 255, 0.75);
+    cursor: pointer;
+    transition: transform 160ms var(--ease-bounce), filter 160ms var(--ease);
+}
+.topping-wedge:hover { transform: translate(-50%, -50%) scale(1.12); }
+.topping-wedge:active { transform: translate(-50%, -50%) scale(0.95); }
+
+.topping-wedge img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.5));
+}
+
+/* an EMPTY wedge: just a soft dark disc with a +, so it reads as
+   "space for a topping" without covering the star's artwork */
+.topping-wedge:not(.filled) {
+    background: rgba(0, 0, 0, 0.28);
+    border: 1px dashed rgba(255, 255, 255, 0.35);
+    backdrop-filter: blur(1px);
+}
+.topping-wedge:not(.filled):hover {
+    background: rgba(0, 0, 0, 0.4);
+    border-color: var(--color-primary);
+    color: #fff;
 }
 
 .topping-board-count {
     text-align: center;
     font-size: 13px;
     font-weight: 600;
-    margin-top: 4px;
+    margin-top: 10px;
 }
 
 
@@ -2135,8 +2167,9 @@ input[type="number"] {
     }
     .picker-modal, .detail-modal, .follow-modal, .enemy-editor { max-height: 92dvh; }
 
-    /* the topping board has to shrink to fit a phone */
-    .topping-board { width: 260px !important; height: 260px !important; }
+    /* the board already sizes itself with min(320px, 78vw), so it
+       just needs a little more breathing room on a phone */
+    .topping-board { width: min(300px, 82vw); }
 
     /* Sort rows wrap instead of squashing. */
     .roster-toolbar { gap: 8px; }
@@ -2170,26 +2203,26 @@ input[type="number"] {
 
 
 /* ============================================================
-   LEVELLING ROWS - keep them on ONE line
-   Six ascension buttons (and seven awakening ones) were wrapping
-   onto a second row inside the build popup, which looked broken.
-   Scrolling sideways is tidier than wrapping, and the winged
-   banners stay big enough to tell apart.
+   LEVELLING ROWS
+   These WRAP rather than scroll sideways. A sideways-scrolling
+   row left the last banner visibly sliced in half at the edge,
+   which reads as a bug even though it scrolled. Wrapping onto a
+   tidy second line does not.
+
+   The banners are sized so the six ascension buttons fit on one
+   line inside the build popup; the seven awakening ones wrap to
+   a neat second row.
    ============================================================ */
 .ascension-row,
 .awakening-row {
-    flex-wrap: nowrap;
-    overflow-x: auto;
-    padding-bottom: 4px;
-    /* a thin scrollbar rather than the chunky default */
-    scrollbar-width: thin;
+    flex-wrap: wrap;
+    overflow: visible;
 }
-.ascension-row > *,
-.awakening-row > * { flex-shrink: 0; }
 
-.ascension-btn { padding: 5px 8px; }
-.ascension-btn img { height: 22px; }
-.awakening-btn img { height: 24px; }
+.ascension-btn { padding: 4px 7px; }
+.ascension-btn img { height: 20px; }
+.awakening-btn { padding: 4px 7px; }
+.awakening-btn img { height: 22px; }
 
 /* the "None" option is text, so it needs a little more room */
 .ascension-none { white-space: nowrap; font-size: 12px; }
