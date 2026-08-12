@@ -7,13 +7,14 @@
 // ============================================================
 
 import { useState } from 'react';
-import { X, Star, Plus } from 'lucide-react';
+import { X, Plus } from 'lucide-react';
 import { Cookie } from '../api';
 import {
-    CookieBuild, BEASCUITS, BEASCUIT_STATS, ASCENSION_LEVELS, SubStat, TOPPINGS,
-    beascuitImageUrl, ascensionImageUrl, toppingImageUrl,
+    CookieBuild, BEASCUITS, BEASCUIT_STATS, SubStat, TOPPINGS,
+    beascuitImageUrl, toppingImageUrl,
 } from '../gear';
 import { ToppingCircle } from './ToppingCircle';
+import { LevellingPicker } from './LevellingPicker';
 
 interface Props {
     cookie: Cookie;
@@ -33,38 +34,20 @@ export function CookieBuildEditor({ cookie, build, onChange, onClose }: Props) {
                 <h2 style={{ marginBottom: 4 }}>{cookie.name}</h2>
                 <p className="muted" style={{ fontSize: 14, marginBottom: 20 }}>Build customisation</p>
 
-                {/* ---- Level + Ascension ---- */}
-                <div className="build-row">
-                    <div>
-                        <label htmlFor="ck-level" className="field-label">Level</label>
-                        <input id="ck-level" className="input" type="number" min={1} max={90}
-                            style={{ width: 110 }}
-                            value={build.level}
-                            onChange={e => patch({ level: Number(e.target.value) })} />
-                    </div>
-                    <div style={{ flex: 1 }}>
-                        <span className="field-label">Ascension</span>
-                        <div className="ascension-row">
-                            {ASCENSION_LEVELS.map(lvl => (
-                                <button
-                                    key={lvl}
-                                    className={'ascension-btn' + (build.ascension === lvl ? ' active' : '')}
-                                    onClick={() => patch({ ascension: lvl })}
-                                    title={lvl === 0 ? 'Not ascended' : `${lvl}A`}
-                                >
-                                    {lvl === 0
-                                        ? <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><Star size={14} /> None</span>
-                                        : <img src={ascensionImageUrl(lvl)} alt={`${lvl}A`} height={20} />}
-                                </button>
-                            ))}
-                        </div>
-                    </div>
-                </div>
+                {/* ---- Level, ascension and (if it has one) awakening ---- */}
+                <LevellingPicker
+                    rarity={cookie.rarity}
+                    level={build.level}
+                    ascension={build.ascension}
+                    awakening={build.awakening}
+                    idPrefix="ally"
+                    onChange={patch}
+                />
 
                 {/* ---- Toppings (the in-game circle) ---- */}
                 <h3 style={{ margin: '24px 0 8px' }}>Toppings</h3>
                 <div style={{ display: 'flex', justifyContent: 'center' }}>
-                    <ToppingCircle cookie={cookie} slots={build.toppings}
+                    <ToppingCircle slots={build.toppings} tart={build.tart}
                         onChange={toppings => patch({ toppings })} />
                 </div>
 

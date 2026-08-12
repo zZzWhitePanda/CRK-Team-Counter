@@ -94,6 +94,7 @@ export function readBuildDetails(gearSetup: unknown): BuildDetails {
                 }
                 : null,
             ascension: asNumber(b.ascension, 0),
+            awakening: asNumber(b.awakening, 0),
             level: asNumber(b.level, 1),
         }));
 
@@ -103,6 +104,7 @@ export function readBuildDetails(gearSetup: unknown): BuildDetails {
         .map(e => ({
             cookie: e.cookie as string,
             ascension: asNumber(e.ascension, 0),
+            awakening: asNumber(e.awakening, 0),
             level: asNumber(e.level, 1),
         }));
 

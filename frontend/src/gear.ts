@@ -67,63 +67,106 @@ export const BEASCUITS: BeascuitType[] = [
 // for these 4 stats.
 export const BEASCUIT_STATS = ['ATK', 'HP', 'Bonus 1', 'Bonus 2'];
 
-// ---- Ascension ------------------------------------------------
-// Cookies can be Ascended from 1A up to 5A (shown as stars). 0 = not
-// ascended. The star images are ascension/star-1.png .. star-5.png.
+// ---- Ascension and Awakening ----------------------------------
+// These are TWO SEPARATE systems that stack on top of each other.
+//
+//   Ascension  - every cookie has it, 1A to 5A, shown as the small
+//                star badges (ascension/star-1.png .. star-5.png).
+//
+//   Awakening  - ONLY Ancient and Beast cookies. It goes up to 6,
+//                one higher than ascension, and is shown as the
+//                big winged star banner. Ancient and Beast have
+//                DIFFERENT artwork for it (blue/purple wings vs
+//                gold), so the image depends on the cookie's
+//                rarity as well as the level.
+//
+// Both are 0 when the cookie doesn't have any.
 export const ASCENSION_LEVELS = [0, 1, 2, 3, 4, 5];
+export const AWAKENING_LEVELS = [0, 1, 2, 3, 4, 5, 6];
+
+// which rarities get the awakening track at all
+const AWAKENING_RARITIES = ['Ancient', 'Beast'];
+
+/** Does this cookie rarity have the awakening system? */
+export function hasAwakening(rarity: string): boolean {
+    return AWAKENING_RARITIES.includes(rarity);
+}
+
+/**
+ * Which awakening artwork a cookie uses. Ancient cookies get the
+ * blue/purple winged stars, Beast cookies the gold ones.
+ * Returns null for rarities that don't awaken at all.
+ */
+export function awakeningStyle(rarity: string): 'ancient' | 'beast' | null {
+    if (rarity === 'Ancient') return 'ancient';
+    if (rarity === 'Beast') return 'beast';
+    return null;
+}
 
 // ---- Treasures ------------------------------------------------
 // Treasures are equipped to the whole TEAM (3 slots), not per cookie.
 // All 45 are from https://cookierunkingdom.fandom.com/wiki/Treasure
 // `key` matches the image filename in assets/treasure-images/.
-export interface Treasure { key: string; name: string; }
+export interface Treasure {
+    key: string;
+    name: string;
+    rarity: TreasureRarity;
+}
+
+// Treasure rarities, worst to best. The index in this list IS the
+// rank, the same trick the cookie rarity sort uses.
+export const TREASURE_RARITIES = ['Common', 'Rare', 'Special', 'Epic'] as const;
+export type TreasureRarity = typeof TREASURE_RARITIES[number];
+
+export const TREASURE_RARITY_RANK: Record<string, number> =
+    Object.fromEntries(TREASURE_RARITIES.map((r, i) => [r, i]));
 
 export const TREASURES: Treasure[] = [
-    { key: 'cheesebird-s-coin-purse', name: "Cheesebird's Coin Purse" },
-    { key: 'gatekeeper-ghost-s-horn', name: "Gatekeeper Ghost's Horn" },
-    { key: 'ginkgoblin-s-trophy-safe', name: "Ginkgoblin's Trophy Safe" },
-    { key: 'squishy-jelly-watch', name: 'Squishy Jelly Watch' },
-    { key: 'bear-jelly-s-lollipop', name: "Bear Jelly's Lollipop" },
-    { key: 'disciple-s-magic-scroll', name: "Disciple's Magic Scroll" },
-    { key: 'echo-of-the-hurricane-s-song', name: "Echo of the Hurricane's Song" },
-    { key: 'grim-looking-scythe', name: 'Grim-looking Scythe' },
-    { key: 'miraculous-ghost-ice-cream', name: 'Miraculous Ghost Ice Cream' },
-    { key: 'pilgrim-s-slingshot', name: "Pilgrim's Slingshot" },
-    { key: 'priestess-cookie-s-paper-charm', name: "Priestess Cookie's Paper Charm" },
-    { key: 'acorn-snowball-with-a-tiny-cookie', name: 'Acorn Snowball With a Tiny Cookie' },
-    { key: 'blossoming-acorn-bomb', name: 'Blossoming Acorn Bomb' },
-    { key: 'festive-acorn-gift-box', name: 'Festive Acorn Gift Box' },
-    { key: 'ice-cold-energy-drink', name: 'Ice-cold Energy Drink' },
-    { key: 'blind-healer-s-staff', name: "Blind Healer's Staff" },
-    { key: 'bookseller-s-monocle', name: "Bookseller's Monocle" },
-    { key: 'cape-of-the-vanquisher', name: 'Cape of the Vanquisher' },
-    { key: 'cursed-catacombs-candle', name: 'Cursed Catacombs Candle' },
-    { key: 'divine-honey-cream-crown', name: 'Divine Honey Cream Crown' },
-    { key: 'dream-conductor-s-whistle', name: "Dream Conductor's Whistle" },
-    { key: 'durianeer-s-squeaky-flamingo-tube', name: "Durianeer's Squeaky Flamingo Tube" },
-    { key: 'elder-pilgrim-s-torch', name: "Elder Pilgrim's Torch" },
-    { key: 'explorer-s-monocle', name: "Explorer's Monocle" },
-    { key: 'great-sage-s-gem', name: "Great Sage's Gem" },
-    { key: 'grim-looking-electrifying-scythe', name: 'Grim-looking Electrifying Scythe' },
-    { key: 'hollyberrian-royal-necklace', name: 'Hollyberrian Royal Necklace' },
-    { key: 'insignia-of-the-indomitable-knights', name: 'Insignia of the Indomitable Knights' },
-    { key: 'jelly-worm-s-sticky-goo', name: "Jelly Worm's Sticky Goo" },
-    { key: 'librarian-s-enchanted-robes', name: "Librarian's Enchanted Robes" },
-    { key: 'milk-tribe-s-frozen-torch', name: "Milk Tribe's Frozen Torch" },
-    { key: 'miraculous-natural-remedy', name: 'Miraculous Natural Remedy' },
-    { key: 'mysterious-jewelry-box', name: 'Mysterious Jewelry Box' },
-    { key: 'mystical-silver-fork', name: 'Mystical Silver Fork' },
-    { key: 'old-pilgrim-s-scroll', name: "Old Pilgrim's Scroll" },
-    { key: 'sacred-pomegranate-branch', name: 'Sacred Pomegranate Branch' },
-    { key: 'seamstress-s-pin-cushion', name: "Seamstress's Pin Cushion" },
-    { key: 'sleepyhead-s-jelly-watch', name: "Sleepyhead's Jelly Watch" },
-    { key: 'subtle-fragrant-remedy', name: 'Subtle Fragrant Remedy' },
-    { key: 'sugar-swan-s-shining-feather', name: "Sugar Swan's Shining Feather" },
-    { key: 'the-order-s-sacred-fork', name: "The Order's Sacred Fork" },
-    { key: 'thunder-god-s-paper-charm', name: "Thunder God's Paper Charm" },
-    { key: 'twinkling-starlight-crown', name: 'Twinkling Starlight Crown' },
-    { key: 'unyielding-berry-necklace', name: 'Unyielding Berry Necklace' },
-    { key: 'vial-of-raging-dunes', name: 'Vial of Raging Dunes' },
+    { key: 'cheesebird-s-coin-purse', name: "Cheesebird's Coin Purse", rarity: 'Common' },
+    { key: 'gatekeeper-ghost-s-horn', name: "Gatekeeper Ghost's Horn", rarity: 'Common' },
+    { key: 'ginkgoblin-s-trophy-safe', name: "Ginkgoblin's Trophy Safe", rarity: 'Common' },
+    { key: 'squishy-jelly-watch', name: 'Squishy Jelly Watch', rarity: 'Common' },
+    { key: 'bear-jelly-s-lollipop', name: "Bear Jelly's Lollipop", rarity: 'Rare' },
+    { key: 'disciple-s-magic-scroll', name: "Disciple's Magic Scroll", rarity: 'Rare' },
+    { key: 'echo-of-the-hurricane-s-song', name: "Echo of the Hurricane's Song", rarity: 'Rare' },
+    { key: 'grim-looking-scythe', name: 'Grim-looking Scythe', rarity: 'Rare' },
+    { key: 'miraculous-ghost-ice-cream', name: 'Miraculous Ghost Ice Cream', rarity: 'Rare' },
+    { key: 'pilgrim-s-slingshot', name: "Pilgrim's Slingshot", rarity: 'Rare' },
+    { key: 'priestess-cookie-s-paper-charm', name: "Priestess Cookie's Paper Charm", rarity: 'Rare' },
+    { key: 'acorn-snowball-with-a-tiny-cookie', name: 'Acorn Snowball With a Tiny Cookie', rarity: 'Special' },
+    { key: 'blossoming-acorn-bomb', name: 'Blossoming Acorn Bomb', rarity: 'Special' },
+    { key: 'festive-acorn-gift-box', name: 'Festive Acorn Gift Box', rarity: 'Special' },
+    { key: 'ice-cold-energy-drink', name: 'Ice-cold Energy Drink', rarity: 'Special' },
+    { key: 'blind-healer-s-staff', name: "Blind Healer's Staff", rarity: 'Epic' },
+    { key: 'bookseller-s-monocle', name: "Bookseller's Monocle", rarity: 'Epic' },
+    { key: 'cape-of-the-vanquisher', name: 'Cape of the Vanquisher', rarity: 'Epic' },
+    { key: 'cursed-catacombs-candle', name: 'Cursed Catacombs Candle', rarity: 'Epic' },
+    { key: 'divine-honey-cream-crown', name: 'Divine Honey Cream Crown', rarity: 'Epic' },
+    { key: 'dream-conductor-s-whistle', name: "Dream Conductor's Whistle", rarity: 'Epic' },
+    { key: 'durianeer-s-squeaky-flamingo-tube', name: "Durianeer's Squeaky Flamingo Tube", rarity: 'Epic' },
+    { key: 'elder-pilgrim-s-torch', name: "Elder Pilgrim's Torch", rarity: 'Epic' },
+    { key: 'explorer-s-monocle', name: "Explorer's Monocle", rarity: 'Epic' },
+    { key: 'great-sage-s-gem', name: "Great Sage's Gem", rarity: 'Epic' },
+    { key: 'grim-looking-electrifying-scythe', name: 'Grim-looking Electrifying Scythe', rarity: 'Epic' },
+    { key: 'hollyberrian-royal-necklace', name: 'Hollyberrian Royal Necklace', rarity: 'Epic' },
+    { key: 'insignia-of-the-indomitable-knights', name: 'Insignia of the Indomitable Knights', rarity: 'Epic' },
+    { key: 'jelly-worm-s-sticky-goo', name: "Jelly Worm's Sticky Goo", rarity: 'Epic' },
+    { key: 'librarian-s-enchanted-robes', name: "Librarian's Enchanted Robes", rarity: 'Epic' },
+    { key: 'milk-tribe-s-frozen-torch', name: "Milk Tribe's Frozen Torch", rarity: 'Epic' },
+    { key: 'miraculous-natural-remedy', name: 'Miraculous Natural Remedy', rarity: 'Epic' },
+    { key: 'mysterious-jewelry-box', name: 'Mysterious Jewelry Box', rarity: 'Epic' },
+    { key: 'mystical-silver-fork', name: 'Mystical Silver Fork', rarity: 'Epic' },
+    { key: 'old-pilgrim-s-scroll', name: "Old Pilgrim's Scroll", rarity: 'Epic' },
+    { key: 'sacred-pomegranate-branch', name: 'Sacred Pomegranate Branch', rarity: 'Epic' },
+    { key: 'seamstress-s-pin-cushion', name: "Seamstress's Pin Cushion", rarity: 'Epic' },
+    { key: 'sleepyhead-s-jelly-watch', name: "Sleepyhead's Jelly Watch", rarity: 'Epic' },
+    { key: 'subtle-fragrant-remedy', name: 'Subtle Fragrant Remedy', rarity: 'Epic' },
+    { key: 'sugar-swan-s-shining-feather', name: "Sugar Swan's Shining Feather", rarity: 'Epic' },
+    { key: 'the-order-s-sacred-fork', name: "The Order's Sacred Fork", rarity: 'Epic' },
+    { key: 'thunder-god-s-paper-charm', name: "Thunder God's Paper Charm", rarity: 'Epic' },
+    { key: 'twinkling-starlight-crown', name: 'Twinkling Starlight Crown', rarity: 'Epic' },
+    { key: 'unyielding-berry-necklace', name: 'Unyielding Berry Necklace', rarity: 'Epic' },
+    { key: 'vial-of-raging-dunes', name: 'Vial of Raging Dunes', rarity: 'Epic' },
 ];
 
 // a team's treasures = 3 slots (each a treasure key, or null if empty)
@@ -148,19 +191,33 @@ export interface CookieBuild {
     toppings: (ToppingSlot | null)[];  // exactly 5 slots (normal toppings)
     tart: string | null;              // the single Topping Tart flavour (or none)
     beascuit: BeascuitBuild | null;
-    ascension: number;                 // 0-5
-    level: number;                     // 1-90 typically
+    ascension: number;                 // 0-5, every cookie
+    awakening: number;                 // 0-6, Ancient + Beast cookies only
+    level: number;                     // 1-100
 }
+
+// Most people building a team are at or near max level, so 100 is a
+// far more useful starting point than 1 - it saves typing on every
+// single cookie.
+export const DEFAULT_LEVEL = 100;
+export const MAX_LEVEL = 100;
 
 // a fresh, empty build (5 empty topping slots, nothing else set)
 export function emptyBuild(): CookieBuild {
-    return { toppings: [null, null, null, null, null], tart: null, beascuit: null, ascension: 0, level: 1 };
+    return {
+        toppings: [null, null, null, null, null],
+        tart: null, beascuit: null,
+        ascension: 0, awakening: 0, level: DEFAULT_LEVEL,
+    };
 }
 
-// What you can see of an ENEMY cookie in-game: only their level and
-// ascension (you can't see their toppings, tart or beascuit).
-export interface EnemyInfo { ascension: number; level: number; }
-export function emptyEnemyInfo(): EnemyInfo { return { ascension: 0, level: 1 }; }
+// What you can see of an ENEMY cookie in-game: only their level,
+// ascension and (for Ancient/Beast) awakening - you can't see
+// their toppings, tart or beascuit.
+export interface EnemyInfo { ascension: number; awakening: number; level: number; }
+export function emptyEnemyInfo(): EnemyInfo {
+    return { ascension: 0, awakening: 0, level: DEFAULT_LEVEL };
+}
 
 // ---- image URL helpers ----------------------------------------
 export function toppingImageUrl(toppingKey: string, isTart: boolean) {
@@ -171,6 +228,24 @@ export function beascuitImageUrl(key: string) {
 }
 export function ascensionImageUrl(level: number) {
     return `${API_BASE}/images/ascension/star-${level}.png`;
+}
+
+/**
+ * The big winged-star banner for an awakened Ancient or Beast
+ * cookie. `style` comes from awakeningStyle(cookie.rarity).
+ */
+export function awakeningImageUrl(style: 'ancient' | 'beast', level: number) {
+    return `${API_BASE}/images/awakening/${style}-${level}.png`;
+}
+
+/**
+ * The star-shaped topping board. In game the board itself changes
+ * to match the equipped Topping Tart - no tart is a plain dark
+ * star, a raspberry tart makes it red, and so on. Pass null for
+ * "no tart".
+ */
+export function tartBoardUrl(tartKey: string | null) {
+    return `${API_BASE}/images/tart-board/${tartKey ?? 'none'}.png`;
 }
 export function treasureImageUrl(key: string) {
     return `${API_BASE}/images/treasures/${key}.png`;

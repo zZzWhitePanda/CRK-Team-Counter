@@ -43,6 +43,9 @@ export interface MetaTeam {
     gear_setup: GearSetup | null;
     counters: string[];
     win_rate: string; // Postgres sends NUMERIC as a string
+    matched?: number;
+    searched?: number;
+    exact?: boolean;
 }
 
 export interface PlayerBuild {
@@ -65,6 +68,13 @@ export interface PlayerBuild {
     is_public?: boolean;
     created_at?: string;
     score?: number;
+    // ---- only set by the counter lookup ----
+    // The lookup returns SIMILAR teams, not just exact ones, so
+    // each result reports how much of the searched team it covers.
+    matched?: number;      // enemy cookies this build shares
+    searched?: number;     // how many were searched for
+    exact?: boolean;       // covers precisely the searched team
+    anyTeam?: boolean;     // posted with no enemy team at all
 }
 
 export interface LookupResult {

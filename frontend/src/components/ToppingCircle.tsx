@@ -1,31 +1,38 @@
 // ============================================================
 // ToppingCircle.tsx - the in-game topping screen.
 //
-// Shows 5 topping slots arranged in a circle around the cookie,
-// exactly like Cookie Run: Kingdom. An empty slot is a dashed
-// outline; click it to open the picker (all toppings + Topping
-// Tarts, with images), choose one, then set its sub-stats.
-// Click a filled slot to change it, edit its sub-stats or remove.
+// Cookie Run: Kingdom shows toppings on a STAR-shaped board with
+// one slot per point, and the board itself is re-skinned by
+// whichever Topping Tart is equipped (no tart = a plain dark
+// star, a raspberry tart turns it red, and so on).
+//
+// This copies that. The board images are the game's own art,
+// pulled from the wiki (assets/tart-board/<flavour>.png), and
+// the five slots are positioned over the star's points.
+//
+// An empty slot is a dashed outline; click it to pick a topping
+// and set its sub-stats. Click a filled one to change or remove.
 // ============================================================
 
 import { useState } from 'react';
 import { X, Plus, Trash2 } from 'lucide-react';
-import { Cookie, cookieImageUrl } from '../api';
 import {
-    TOPPINGS, TOPPING_SUBSTATS, ToppingSlot, SubStat, toppingImageUrl,
+    TOPPINGS, TOPPING_SUBSTATS, ToppingSlot, SubStat,
+    toppingImageUrl, tartBoardUrl,
 } from '../gear';
 
 interface ToppingCircleProps {
-    cookie: Cookie;                       // the cookie these toppings belong to
     slots: (ToppingSlot | null)[];        // the 5 slots
+    tart: string | null;                  // equipped tart, re-skins the board
     onChange: (slots: (ToppingSlot | null)[]) => void;
 }
 
-// Work out where each of the 5 slots sits around the circle.
-// Start at the top and go round every 72 degrees (360 / 5).
-const BOX = 280;                          // circle container size (px)
-const RADIUS = 104;                       // how far slots sit from centre
-const SLOT = 60;                          // slot size
+// Where each of the 5 slots sits. A five-pointed star has a point
+// every 72 degrees starting at the top, which is exactly where the
+// game puts its topping slots.
+const BOX = 300;                          // board container size (px)
+const RADIUS = 112;                       // how far slots sit from centre
+const SLOT = 58;                          // slot size
 function slotPosition(i: number) {
     const angle = (-90 + i * 72) * (Math.PI / 180);   // degrees -> radians
     return {
@@ -34,7 +41,7 @@ function slotPosition(i: number) {
     };
 }
 
-export function ToppingCircle({ cookie, slots, onChange }: ToppingCircleProps) {
+export function ToppingCircle({ slots, tart, onChange }: ToppingCircleProps) {
     // which slot's editor is open (null = none)
     const [editing, setEditing] = useState<number | null>(null);
 
@@ -44,35 +51,46 @@ export function ToppingCircle({ cookie, slots, onChange }: ToppingCircleProps) {
         onChange(next);
     }
 
+    const filled = slots.filter(Boolean).length;
+
     return (
         <div>
-            <div className="topping-circle" style={{ width: BOX, height: BOX }}>
-                {/* the cookie in the middle */}
-                <div className="topping-circle-center">
-                    <img src={cookieImageUrl(cookie.image_file)} alt={cookie.name} width={120} height={120} />
-                </div>
+            <div className="topping-board" style={{ width: BOX, height: BOX }}>
+                {/* The star board. Its artwork changes with the tart,
+                    the same way it does in game. */}
+                <img
+                    className={'topping-board-star' + (filled === 5 ? ' complete' : '')}
+                    src={tartBoardUrl(tart)}
+                    alt={tart ? `${tart} Topping Tart equipped` : 'No Topping Tart equipped'}
+                />
 
                 {/* the 5 slots around it */}
                 {slots.map((slot, i) => {
                     const pos = slotPosition(i);
+                    const topping = slot ? TOPPINGS.find(t => t.key === slot.toppingKey) : null;
                     return (
                         <button
                             key={i}
                             className={'topping-slot-ring' + (slot ? ' filled' : '')}
                             style={{ left: pos.left, top: pos.top, width: SLOT, height: SLOT }}
                             onClick={() => setEditing(i)}
-                            title={slot ? 'Edit topping' : 'Add topping'}
+                            title={topping ? topping.name : 'Empty — click to add a topping'}
                         >
                             {slot ? (
                                 <img src={toppingImageUrl(slot.toppingKey, slot.isTart)}
-                                     alt="" width={44} height={44} />
+                                     alt="" width={40} height={40} />
                             ) : (
-                                <Plus size={22} aria-hidden="true" />
+                                <Plus size={20} aria-hidden="true" />
                             )}
                         </button>
                     );
                 })}
             </div>
+
+            <p className="muted topping-board-count">
+                {filled} of 5 toppings
+                {tart && ` · ${TOPPINGS.find(t => t.key === tart)?.name ?? tart} Tart`}
+            </p>
 
             {editing !== null && (
                 <ToppingSlotEditor
@@ -102,7 +120,7 @@ function ToppingSlotEditor({ slot, onSave, onRemove, onClose }: {
 
     function choose(key: string) {
         setToppingKey(key);
-        setIsTart(false);   // the circle holds normal toppings; tarts are a separate slot
+        setIsTart(false);   // the board holds normal toppings; tarts are a separate slot
         setStep('stats');
     }
 
@@ -122,14 +140,16 @@ function ToppingSlotEditor({ slot, onSave, onRemove, onClose }: {
                 {step === 'pick' && (
                     <>
                         <h2 style={{ marginBottom: 12 }}>Choose a topping</h2>
-                        <div className="picker-grid">
-                            {TOPPINGS.map(t => (
-                                <button key={t.key} className="picker-option" onClick={() => choose(t.key)} title={t.name}>
-                                    <img src={toppingImageUrl(t.key, false)} alt={t.name} width={52} height={52} />
-                                    <span className="picker-option-name">{t.name}</span>
-                                    <span className="muted" style={{ fontSize: 10, fontWeight: 700 }}>{t.primaryStat}</span>
-                                </button>
-                            ))}
+                        <div className="picker-scroll">
+                            <div className="picker-grid">
+                                {TOPPINGS.map(t => (
+                                    <button key={t.key} className="picker-option" onClick={() => choose(t.key)} title={t.name}>
+                                        <img src={toppingImageUrl(t.key, false)} alt={t.name} width={52} height={52} />
+                                        <span className="picker-option-name">{t.name}</span>
+                                        <span className="muted" style={{ fontSize: 10, fontWeight: 700 }}>{t.primaryStat}</span>
+                                    </button>
+                                ))}
+                            </div>
                         </div>
                     </>
                 )}
@@ -166,12 +186,12 @@ function ToppingSlotEditor({ slot, onSave, onRemove, onClose }: {
                         ))}
 
                         {substats.length < 3 && (
-                            <button className="pill" onClick={addSubstat} style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4 }}>
+                            <button className="pill" onClick={addSubstat} style={{ marginTop: 4 }}>
                                 <Plus size={15} /> Add sub-stat
                             </button>
                         )}
 
-                        <div style={{ display: 'flex', gap: 10, marginTop: 24 }}>
+                        <div style={{ display: 'flex', gap: 10, marginTop: 24, flexWrap: 'wrap' }}>
                             <button className="btn-primary" onClick={() => onSave({ toppingKey, isTart, substats })}>
                                 Save topping
                             </button>
@@ -187,4 +207,3 @@ function ToppingSlotEditor({ slot, onSave, onRemove, onClose }: {
         </div>
     );
 }
-

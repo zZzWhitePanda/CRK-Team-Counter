@@ -89,17 +89,20 @@ buildsRouter.post('/', requireAuth, async (req: Request, res: Response) => {
         const gearSetup = req.body.gearSetup ?? {};
         const note = String(req.body.note ?? '').trim();
 
-        // validate both teams are arrays of 1-5 cookie names
-        const okTeam = (t: unknown) =>
-            Array.isArray(t) && t.length >= 1 && t.length <= 5 &&
+        // validate both teams are arrays of cookie names
+        const okTeam = (t: unknown, min: number) =>
+            Array.isArray(t) && t.length >= min && t.length <= 5 &&
             t.every(c => typeof c === 'string' && c.trim() !== '');
 
-        if (!okTeam(opponentTeam)) {
-            res.status(400).json({ error: 'Pick 1-5 enemy cookies.' });
+        // The enemy team is OPTIONAL: leaving it empty means "this
+        // team works against anything", which is a perfectly normal
+        // thing to want to share. The counter team is still required.
+        if (!okTeam(opponentTeam, 0)) {
+            res.status(400).json({ error: 'The enemy team can have up to 5 cookies.' });
             return;
         }
-        if (!okTeam(counterTeam)) {
-            res.status(400).json({ error: 'Pick 1-5 cookies for your counter team.' });
+        if (!okTeam(counterTeam, 1)) {
+            res.status(400).json({ error: 'Pick 1-5 cookies for your team.' });
             return;
         }
         if (note.length > 1000) {   // FR05: note max 1000 chars

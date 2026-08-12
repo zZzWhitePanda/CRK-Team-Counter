@@ -13,7 +13,9 @@ import { CookiePicker } from '../components/CookiePicker';
 import { CookieBuildEditor } from '../components/CookieBuildEditor';
 import { EnemyCookieEditor } from '../components/EnemyCookieEditor';
 import { TreasureSelector } from '../components/TreasureSelector';
+import { TeamOverview } from '../components/TeamOverview';
 import { AuthModal } from '../components/AuthModal';
+import { useDragReorder, moveItem } from '../useDragReorder';
 import {
     CookieBuild, emptyBuild, EnemyInfo, emptyEnemyInfo,
     TeamTreasures, emptyTreasures,
@@ -194,11 +196,25 @@ function SubmitForm({ roster, onSubmitted }: { roster: Cookie[]; onSubmitted: (b
     const [editEnemy, setEditEnemy] = useState<number | null>(null);
     const [editMine, setEditMine] = useState<number | null>(null);
 
+    // ---- drag to reorder ----
+    // Order matters in game (front / middle / rear), so both teams
+    // can be rearranged. Each drag has to move the cookie names AND
+    // their parallel build/info arrays so a cookie keeps its gear.
+    const enemyDrag = useDragReorder((from, to) => {
+        setOpponent(prev => moveItem(prev, from, to));
+        setOpponentInfo(prev => moveItem(prev, from, to));
+    });
+    const allyDrag = useDragReorder((from, to) => {
+        setCounter(prev => moveItem(prev, from, to));
+        setCounterBuilds(prev => moveItem(prev, from, to));
+    });
+
     async function handleSubmit() {
         const opp = opponent.filter(n => n);
         const cnt = counter.filter(n => n);
-        if (opp.length === 0) { setError('Pick at least one enemy cookie.'); return; }
-        if (cnt.length === 0) { setError('Pick at least one cookie for your counter team.'); return; }
+        // The enemy team is OPTIONAL - leaving it empty posts a
+        // general-purpose team ("this works against anything").
+        if (cnt.length === 0) { setError('Pick at least one cookie for your team.'); return; }
 
         // The full build details (toppings/beascuit/treasures/etc) are
         // saved in the build's gearSetup field so nothing is lost.
@@ -223,15 +239,25 @@ function SubmitForm({ roster, onSubmitted }: { roster: Cookie[]; onSubmitted: (b
 
     return (
         <div className="card" style={{ marginBottom: 24, borderColor: 'var(--color-primary)' }}>
-            <h2 style={{ fontSize: 18, marginBottom: 16 }}>Submit a counter build</h2>
+            <h2 style={{ fontSize: 18, marginBottom: 4 }}>Submit a build</h2>
+            <p className="muted" style={{ fontSize: 14, marginBottom: 18 }}>
+                Drag the cookies to change their order. The enemy team is optional —
+                leave it empty to post a team that works against anything.
+            </p>
 
-            {/* ---- enemy team (level + ascension only) ---- */}
-            <p className="field-label" style={{ color: 'var(--color-enemy)' }}>Enemy team you're countering</p>
+            {/* ---- enemy team (level + stars only) ---- */}
+            <p className="field-label" style={{ color: 'var(--color-enemy)' }}>
+                Enemy team you're countering
+                <span className="muted" style={{ fontWeight: 400, marginLeft: 8 }}>optional</span>
+            </p>
             <div className="picker-row" style={{ marginBottom: 12 }}>
                 {opponent.map((name, i) => {
                     const cookie = roster.find(c => c.name === name);
+                    const { className: dragClass, ...dragHandlers } =
+                        cookie ? enemyDrag.slotProps(i) : { className: '' };
                     return (
-                        <div key={i} className="picker-cell">
+                        <div key={i} className={'picker-cell ' + (dragClass ?? '')}
+                             {...dragHandlers}>
                             <CookiePicker roster={roster} selectedName={name}
                                 disabledNames={opponent.filter(n => n)}
                                 onPick={n => setOpponent(prev => prev.map((v, idx) => idx === i ? n : v))}
@@ -256,8 +282,11 @@ function SubmitForm({ roster, onSubmitted }: { roster: Cookie[]; onSubmitted: (b
             <div className="picker-row" style={{ marginBottom: 12 }}>
                 {counter.map((name, i) => {
                     const cookie = roster.find(c => c.name === name);
+                    const { className: dragClass, ...dragHandlers } =
+                        cookie ? allyDrag.slotProps(i) : { className: '' };
                     return (
-                        <div key={i} className="picker-cell">
+                        <div key={i} className={'picker-cell ' + (dragClass ?? '')}
+                             {...dragHandlers}>
                             <CookiePicker roster={roster} selectedName={name}
                                 disabledNames={counter.filter(n => n)}
                                 onPick={n => setCounter(prev => prev.map((v, idx) => idx === i ? n : v))}
@@ -278,6 +307,17 @@ function SubmitForm({ roster, onSubmitted }: { roster: Cookie[]; onSubmitted: (b
                 <Gem size={14} color="var(--color-ally)" aria-hidden="true" /> Your treasures
             </h4>
             <TreasureSelector treasures={yourTreasures} onChange={setYourTreasures} />
+
+            {/* ---- what you've actually set, all in one place ----
+                 Without this you'd have to open each cookie's Build
+                 popup again to remember what you gave it. */}
+            <TeamOverview
+                team={counter}
+                builds={counterBuilds}
+                roster={roster}
+                treasures={yourTreasures}
+                onEdit={i => setEditMine(i)}
+            />
 
             {/* ---- note ---- */}
             <label htmlFor="build-note" className="field-label" style={{ marginTop: 24 }}>Note (how it works — optional, max 1000)</label>

@@ -19,7 +19,9 @@ import { TeamRow } from '../components/TeamRow';
 import { CookiePicker } from '../components/CookiePicker';
 import { EnemyCookieEditor } from '../components/EnemyCookieEditor';
 import { TreasureSelector } from '../components/TreasureSelector';
+import { LevellingBadges } from '../components/LevellingPicker';
 import { EnemyInfo, emptyEnemyInfo, TeamTreasures, emptyTreasures } from '../gear';
+import { useDragReorder, moveItem } from '../useDragReorder';
 
 export function CounterToolPage() {
     const [roster, setRoster] = useState<Cookie[]>([]);
@@ -49,6 +51,13 @@ export function CounterToolPage() {
     function setInfo(index: number, info: EnemyInfo) {
         setEnemyInfo(prev => prev.map((v, i) => i === index ? info : v));
     }
+
+    // Dragging a slot moves the cookie AND its level/stars together,
+    // so a cookie never ends up with someone else's info.
+    const enemyDrag = useDragReorder((from, to) => {
+        setEnemyTeam(prev => moveItem(prev, from, to));
+        setEnemyInfo(prev => moveItem(prev, from, to));
+    });
 
     async function runSearch() {
         // FR09: check on the browser side first so an empty search
@@ -93,11 +102,20 @@ export function CounterToolPage() {
                     OPPONENT'S TEAM
                 </h2>
 
+                <p className="muted" style={{ fontSize: 13, marginBottom: 10 }}>
+                    Drag the cookies to change their order.
+                </p>
                 <div className="picker-row">
                     {enemyTeam.map((name, i) => {
                         const cookie = roster.find(c => c.name === name);
+                        // className is pulled OUT of the spread: spreading
+                        // it too would overwrite the picker-cell class.
+                        const { className: dragClass, ...dragHandlers } =
+                            cookie ? enemyDrag.slotProps(i) : { className: '' };
                         return (
-                            <div key={i} className="picker-cell">
+                            <div key={i}
+                                 className={'picker-cell ' + (dragClass ?? '')}
+                                 {...dragHandlers}>
                                 <CookiePicker
                                     roster={roster}
                                     selectedName={name}
@@ -105,11 +123,13 @@ export function CounterToolPage() {
                                     onPick={n => setSlot(i, n)}
                                     onClear={() => setSlot(i, '')}
                                 />
-                                {/* once picked, a small Info button for level + ascension */}
+                                {/* once picked, a small button for level + stars */}
                                 {cookie && (
                                     <button className="pill info-button" onClick={() => setEditingEnemy(i)}>
                                         <Settings2 size={14} aria-hidden="true" />
-                                        Lv.{enemyInfo[i].level}{enemyInfo[i].ascension > 0 ? ` · ${enemyInfo[i].ascension}A` : ''}
+                                        Lv.{enemyInfo[i].level}
+                                        {enemyInfo[i].ascension > 0 && ` · ${enemyInfo[i].ascension}A`}
+                                        {enemyInfo[i].awakening > 0 && ` · ${enemyInfo[i].awakening}★`}
                                     </button>
                                 )}
                             </div>
@@ -164,7 +184,10 @@ export function CounterToolPage() {
                         <div key={team.meta_team_id} className="card card-interactive" style={{ marginBottom: 12 }}>
                             <div className="build-head">
                                 <h3>{team.team_name}</h3>
-                                <span className="winrate-badge">{Number(team.win_rate).toFixed(0)}% win rate</span>
+                                <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                                    <MatchBadge matched={team.matched} searched={team.searched} exact={team.exact} />
+                                    <span className="winrate-badge">{Number(team.win_rate).toFixed(0)}% win rate</span>
+                                </div>
                             </div>
                             <TeamRow label="USE" kind="ally" cookieNames={team.team_cookies} allCookies={roster} />
                         </div>
@@ -175,15 +198,25 @@ export function CounterToolPage() {
             {/* ---- community builds, by likes (FR04) ---- */}
             {!loading && results && results.playerTeams.length > 0 && (
                 <section>
-                    <h2 style={{ marginBottom: 12 }}>Community Counters</h2>
+                    <h2 style={{ marginBottom: 4 }}>Community Counters</h2>
+                    <p className="muted" style={{ fontSize: 13, marginBottom: 12 }}>
+                        Closest matches first. A partial match still shares cookies with
+                        the team you searched for.
+                    </p>
                     {results.playerTeams.map(build => (
                         <div key={build.build_id} className="card card-interactive" style={{ marginBottom: 12 }}>
                             <div className="build-head">
                                 <span className="muted">by {build.username}</span>
-                                <span className="like-count"><Heart size={16} aria-hidden="true" /> {build.likes}</span>
+                                <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                                    <MatchBadge matched={build.matched} searched={build.searched}
+                                                exact={build.exact} anyTeam={build.anyTeam} />
+                                    <span className="like-count"><Heart size={16} aria-hidden="true" /> {build.likes}</span>
+                                </div>
                             </div>
                             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                                <TeamRow label="VS." kind="enemy" cookieNames={build.opponent_team} allCookies={roster} />
+                                {build.opponent_team.length > 0 && (
+                                    <TeamRow label="VS." kind="enemy" cookieNames={build.opponent_team} allCookies={roster} />
+                                )}
                                 <TeamRow label="USE" kind="ally" cookieNames={build.counter_team} allCookies={roster} />
                             </div>
                             {build.note && <p style={{ marginTop: 12 }}>{build.note}</p>}
@@ -192,5 +225,33 @@ export function CounterToolPage() {
                 </section>
             )}
         </div>
+    );
+}
+
+// ---- how well a result matches what was searched ----------------
+// The lookup now returns SIMILAR teams, not just exact ones, so
+// every result says how much of the searched team it actually
+// covers. Without this a near-miss would look like a perfect
+// answer, which would be misleading.
+function MatchBadge({ matched, searched, exact, anyTeam }: {
+    matched?: number; searched?: number; exact?: boolean; anyTeam?: boolean;
+}) {
+    if (anyTeam) {
+        return (
+            <span className="match-badge any" title="Posted as a team that works against anything">
+                Works vs anything
+            </span>
+        );
+    }
+    if (matched === undefined || !searched) return null;
+
+    if (exact) {
+        return <span className="match-badge exact" title="Built for exactly this team">Exact match</span>;
+    }
+    return (
+        <span className="match-badge partial"
+              title={`Covers ${matched} of the ${searched} cookies you searched for`}>
+            {matched}/{searched} cookies match
+        </span>
     );
 }

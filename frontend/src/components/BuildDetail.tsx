@@ -18,8 +18,9 @@ import { Link } from 'react-router-dom';
 import { Cookie, PlayerBuild, cookieImageUrl } from '../api';
 import {
     BEASCUITS, TOPPINGS, TREASURES,
-    ascensionImageUrl, beascuitImageUrl, toppingImageUrl, treasureImageUrl,
+    beascuitImageUrl, toppingImageUrl, treasureImageUrl,
 } from '../gear';
+import { LevellingBadges } from './LevellingPicker';
 import { readBuildDetails, DetailedCookieBuild, DetailedEnemyInfo } from '../buildDetails';
 import { rarityColor } from '../cookieSort';
 import { Avatar } from './Avatar';
@@ -129,10 +130,13 @@ function EnemyCard({ name, cookie, info }: {
             )}
             <span className="detail-cookie-name">{name}</span>
             {info ? (
-                <>
-                    <span className="detail-level">Lv. {info.level}</span>
-                    <AscensionStars level={info.ascension} />
-                </>
+                <LevellingBadges
+                    rarity={cookie?.rarity ?? ''}
+                    level={info.level}
+                    ascension={info.ascension}
+                    awakening={info.awakening}
+                    compact
+                />
             ) : (
                 <span className="muted" style={{ fontSize: 11 }}>no details</span>
             )}
@@ -160,8 +164,13 @@ function AllyCard({ name, cookie, build }: {
                     <div className="detail-build-name">{name}</div>
                     {build ? (
                         <div className="detail-build-sub">
-                            <span className="detail-level">Lv. {build.level}</span>
-                            <AscensionStars level={build.ascension} />
+                            <LevellingBadges
+                                rarity={cookie?.rarity ?? ''}
+                                level={build.level}
+                                ascension={build.ascension}
+                                awakening={build.awakening}
+                                compact
+                            />
                         </div>
                     ) : (
                         <div className="muted" style={{ fontSize: 12 }}>No build details saved</div>
@@ -231,18 +240,6 @@ function AllyCard({ name, cookie, build }: {
                 </div>
             )}
         </div>
-    );
-}
-
-// ---- the ascension stars (1A - 5A), or nothing at 0 -------------
-function AscensionStars({ level }: { level: number }) {
-    if (!level) return <span className="muted" style={{ fontSize: 11 }}>Not ascended</span>;
-    return (
-        <span className="detail-stars" title={`${level}A ascended`}>
-            <img src={ascensionImageUrl(level)} alt={`${level} ascension`}
-                height={16} loading="lazy" />
-            {level}A
-        </span>
     );
 }
 

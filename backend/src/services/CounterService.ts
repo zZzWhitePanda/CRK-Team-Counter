@@ -24,6 +24,9 @@ export interface MetaTeam {
     gear_setup: GearSetup | null;
     counters: string[];
     win_rate: number;
+    matched?: number;    // how many of the searched cookies it covers
+    searched?: number;
+    exact?: boolean;
 }
 
 // a community build row (joined with the username of who made it)
@@ -35,7 +38,11 @@ export interface PlayerBuild {
     gear_setup: GearSetup | null;
     note: string | null;
     likes: number;
-    score?: number; // only set when the user searched with gear
+    score?: number;         // only set when the user searched with gear
+    matched?: number;       // how many of the enemy cookies this build covers
+    searched?: number;      // how many the user searched for
+    exact?: boolean;        // true when it covers the whole enemy team
+    anyTeam?: boolean;      // true when it's a general-purpose build
 }
 
 // what the lookup hands back to the route
@@ -62,35 +69,63 @@ export class CounterService {
             throw new Error('enemyTeam must contain at least one cookie');
         }
 
-        // STEP 2: meta teams whose "counters" list CONTAINS the
-        // enemy team. @> is Postgres's "contains" check on arrays -
-        // it ignores order, which is exactly what the SRS needs
-        // (the enemy team can be picked in any order). Sorted by
-        // win rate, best first, top 5.
+        // STEP 2: meta teams that counter ANY of the enemy cookies.
+        //
+        // The original version used `counters @> $1`, which only
+        // matched a team that beats EVERY cookie searched for. That
+        // is far too strict in practice: swap one cookie out of a
+        // five-cookie team and you got nothing back at all. The
+        // overlap version below finds teams that share at least one
+        // cookie and then RANKS them by how much they overlap, so a
+        // near-miss still shows up (just lower down).
+        //
+        // && is Postgres's "arrays overlap" operator - true when the
+        // two arrays share at least one element. It uses the same
+        // GIN index as @>, so this stays fast.
         const metaResult = await query(
-            `SELECT meta_team_id, team_name, team_cookies, gear_setup, counters, win_rate
+            `SELECT meta_team_id, team_name, team_cookies, gear_setup, counters, win_rate,
+                    -- how many of the searched cookies this team counters
+                    cardinality(ARRAY(SELECT UNNEST(counters) INTERSECT SELECT UNNEST($1::text[]))) AS matched
              FROM meta_teams
-             WHERE counters @> $1
-             ORDER BY win_rate DESC
-             LIMIT 5`,
+             WHERE counters && $1
+             ORDER BY matched DESC, win_rate DESC
+             LIMIT 8`,
             [enemyTeam]
         );
 
-        // STEP 3: community builds saved against the same enemy
-        // team, sorted by likes, top 5. Joined with users so the
-        // site can show who made each build.
+        // STEP 3: community builds. Two kinds are useful here:
+        //   * builds saved against an overlapping enemy team
+        //   * "works against anything" builds, saved with NO enemy
+        //     team at all - those are always relevant
         const playerResult = await query(
-            `SELECT b.build_id, u.username, u.avatar, b.opponent_team, b.counter_team,
-                    b.gear_setup, b.note, b.likes
+            `SELECT b.build_id, b.user_id, u.username, u.avatar, u.avatar_data, u.titles,
+                    b.opponent_team, b.counter_team,
+                    b.gear_setup, b.note, b.likes, b.views,
+                    cardinality(ARRAY(SELECT UNNEST(b.opponent_team) INTERSECT SELECT UNNEST($1::text[]))) AS matched,
+                    (b.opponent_team IS NULL OR cardinality(b.opponent_team) = 0) AS any_team
              FROM user_builds b
              JOIN users u ON u.user_id = b.user_id
-             WHERE b.opponent_team @> $1 AND b.is_public = TRUE
-             ORDER BY b.likes DESC, b.created_at DESC
-             LIMIT 5`,
+             WHERE b.is_public = TRUE
+               AND (u.banned_at IS NULL
+                    OR (u.banned_until IS NOT NULL AND u.banned_until <= NOW()))
+               AND (b.opponent_team && $1
+                    OR b.opponent_team IS NULL
+                    OR cardinality(b.opponent_team) = 0)
+             ORDER BY matched DESC, b.likes DESC, b.created_at DESC
+             LIMIT 12`,
             [enemyTeam]
         );
 
-        let playerTeams: PlayerBuild[] = playerResult.rows;
+        let playerTeams: PlayerBuild[] = playerResult.rows.map(row => ({
+            ...row,
+            matched: Number(row.matched ?? 0),
+            searched: enemyTeam.length,
+            // "exact" = this build was made against precisely the
+            // team being searched for, so the UI can badge it
+            exact: Number(row.matched ?? 0) === enemyTeam.length
+                && row.opponent_team?.length === enemyTeam.length,
+            anyTeam: row.any_team === true,
+        }));
 
         // STEP 4: if the user told us the enemy's gear, boost the
         // player teams whose saved gear matches it, then re-sort.
@@ -98,8 +133,15 @@ export class CounterService {
             playerTeams = this.applyGearBonus(playerTeams, enemyGear);
         }
 
+        const metaTeams = metaResult.rows.map(row => ({
+            ...row,
+            matched: Number(row.matched ?? 0),
+            searched: enemyTeam.length,
+            exact: Number(row.matched ?? 0) === enemyTeam.length,
+        }));
+
         // STEP 5: hand both lists back
-        return { metaTeams: metaResult.rows, playerTeams };
+        return { metaTeams, playerTeams };
     }
 
     // ----------------------------------------------------------
@@ -122,8 +164,13 @@ export class CounterService {
             team.score = team.likes + matches * GEAR_MATCH_BONUS;
         }
 
-        // sort by score, highest first (b - a = descending)
-        return [...teams].sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
+        // Sort by how many enemy cookies the build actually covers
+        // FIRST, and only use the gear score to break ties. Without
+        // that, a wildly popular build for a different team could
+        // outrank the one that actually matches what was searched.
+        return [...teams].sort((a, b) =>
+            (b.matched ?? 0) - (a.matched ?? 0)
+            || (b.score ?? 0) - (a.score ?? 0));
     }
 }
 
