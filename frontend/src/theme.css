@@ -1895,47 +1895,64 @@ input[type="number"] {
             drop-shadow(0 0 20px color-mix(in srgb, var(--color-primary) 65%, transparent));
 }
 
-/* One topping sitting in a wedge. transform centres it on the
-   point ToppingCircle.tsx calculated. No heavy ring or card -
-   the topping just sits on the board like it does in game. */
+/* One topping sitting in a wedge. translate centres it on the
+   point ToppingCircle.tsx calculated; --wedge-tilt then turns it
+   to sit square in that wedge, the way the game does, instead of
+   all five toppings pointing straight up. */
 .topping-wedge {
     position: absolute;
     transform: translate(-50%, -50%);
-    width: 23.5%;
-    aspect-ratio: 1;
     display: flex;
     align-items: center;
     justify-content: center;
     padding: 0;
     border: none;
-    border-radius: 50%;
     background: none;
-    color: rgba(255, 255, 255, 0.75);
     cursor: pointer;
-    transition: transform 160ms var(--ease-bounce), filter 160ms var(--ease);
+    transition: transform 160ms var(--ease-bounce);
 }
-.topping-wedge:hover { transform: translate(-50%, -50%) scale(1.12); }
-.topping-wedge:active { transform: translate(-50%, -50%) scale(0.95); }
 
-.topping-wedge img {
+/* ---- a FILLED wedge: just the topping, tilted ---- */
+/* 27% fills the wedge properly - the topping art has transparent
+   padding around it, so it renders smaller than its box. */
+.topping-wedge.filled {
+    width: 27%;
+    aspect-ratio: 1;
+}
+.topping-wedge.filled img {
     width: 100%;
     height: 100%;
     object-fit: contain;
-    filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.5));
+    /* the tilt lives on the IMAGE so the button's centring
+       translate isn't disturbed */
+    transform: rotate(var(--wedge-tilt, 0deg));
+    filter: drop-shadow(0 2px 5px rgba(0, 0, 0, 0.55));
 }
+.topping-wedge.filled:hover { transform: translate(-50%, -50%) scale(1.1); }
 
-/* an EMPTY wedge: just a soft dark disc with a +, so it reads as
-   "space for a topping" without covering the star's artwork */
+/* ---- an EMPTY wedge: a small, quiet marker ----
+   Deliberately much smaller than a topping. It only has to say
+   "something goes here", and a big disc buried the star's art. */
 .topping-wedge:not(.filled) {
-    background: rgba(0, 0, 0, 0.28);
-    border: 1px dashed rgba(255, 255, 255, 0.35);
-    backdrop-filter: blur(1px);
+    width: 13%;
+    aspect-ratio: 1;
+    border-radius: 50%;
+    background: rgba(0, 0, 0, 0.30);
+    border: 1px dashed rgba(255, 255, 255, 0.4);
+    color: rgba(255, 255, 255, 0.8);
+}
+.topping-wedge:not(.filled) svg {
+    width: 55%;
+    height: 55%;
 }
 .topping-wedge:not(.filled):hover {
-    background: rgba(0, 0, 0, 0.4);
+    transform: translate(-50%, -50%) scale(1.15);
+    background: rgba(0, 0, 0, 0.45);
     border-color: var(--color-primary);
     color: #fff;
 }
+
+.topping-wedge:active { transform: translate(-50%, -50%) scale(0.94); }
 
 .topping-board-count {
     text-align: center;

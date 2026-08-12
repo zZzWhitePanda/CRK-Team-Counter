@@ -16,7 +16,7 @@
 // wedge rather than floating in a ring outside the star.
 // ============================================================
 
-import { useState } from 'react';
+import React, { useState } from 'react';
 import { X, Plus, Trash2 } from 'lucide-react';
 import {
     TOPPINGS, TOPPING_SUBSTATS, ToppingSlot, SubStat,
@@ -45,7 +45,12 @@ function slotPosition(i: number) {
         // percentages, so the board can be any size
         left: `${50 + WEDGE_RADIUS * 100 * Math.cos(angle)}%`,
         top: `${50 + WEDGE_RADIUS * 100 * Math.sin(angle)}%`,
-    };
+        // Each wedge points a different way, and in game the topping
+        // is TILTED to sit square in its wedge rather than all five
+        // pointing straight up. Slot 0 is the top wedge (no tilt) and
+        // every slot after it is another 72 degrees round.
+        '--wedge-tilt': `${i * 72}deg`,
+    } as React.CSSProperties;
 }
 
 export function ToppingCircle({ slots, tart, onChange }: ToppingCircleProps) {
@@ -89,7 +94,9 @@ export function ToppingCircle({ slots, tart, onChange }: ToppingCircleProps) {
                             {slot ? (
                                 <img src={toppingImageUrl(slot.toppingKey, slot.isTart)} alt="" />
                             ) : (
-                                <Plus size={18} aria-hidden="true" />
+                                // no size prop - the CSS scales it with the
+                                // board so it stays proportional on a phone
+                                <Plus aria-hidden="true" />
                             )}
                         </button>
                     );
