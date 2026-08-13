@@ -1913,11 +1913,12 @@ input[type="number"] {
 }
 
 /* ---- a FILLED wedge: just the topping, tilted ---- */
-/* 27% fills the wedge properly - the topping art has transparent
-   padding around it, so it renders smaller than its box. */
+/* The topping art itself is a portrait diamond (120x175). Match
+   that aspect so the container isn't wasting horizontal space,
+   and size it to fill the star's wedge tray. */
 .topping-wedge.filled {
-    width: 27%;
-    aspect-ratio: 1;
+    width: 24%;
+    aspect-ratio: 120 / 175;
 }
 .topping-wedge.filled img {
     width: 100%;
