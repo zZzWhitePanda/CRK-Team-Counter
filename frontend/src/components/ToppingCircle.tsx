@@ -29,22 +29,19 @@ interface ToppingCircleProps {
     onChange: (slots: (ToppingSlot | null)[]) => void;
 }
 
-// The board is square-ish, so everything is sized as a FRACTION of
-// the container. That way the whole thing scales to one CSS
-// variable and still lines up on a phone.
-//
-// WEDGE_RADIUS is how far out from the centre each topping sits,
-// as a fraction of the board's width. Tuned against the game's own
-// screenshots: much smaller and the toppings bunch up over the
-// middle of the star, much larger and they slide off its points.
-const WEDGE_RADIUS = 0.305;
-
+// Each of the 5 slots sits at a 72-degree interval around the board.
+// The actual distance from the centre lives in CSS as --wedge-radius
+// on .topping-board, so it can be tuned alongside the other sizing
+// knobs in theme.css without touching this file.
 function slotPosition(i: number) {
     const angle = (-90 + i * 72) * (Math.PI / 180);   // degrees -> radians
+    // Per-slot nudge variables (--slot-N-dx, --slot-N-dy) default to
+    // no-op, so setting them lets the demo page (or a future per-slot
+    // tune-up in theme.css) shift any one wedge without touching the
+    // others.
     return {
-        // percentages, so the board can be any size
-        left: `${50 + WEDGE_RADIUS * 100 * Math.cos(angle)}%`,
-        top: `${50 + WEDGE_RADIUS * 100 * Math.sin(angle)}%`,
+        left: `calc(50% + var(--wedge-radius) * ${Math.cos(angle).toFixed(4)} + var(--slot-${i}-dx, 0px))`,
+        top:  `calc(50% + var(--wedge-radius) * ${Math.sin(angle).toFixed(4)} + var(--slot-${i}-dy, 0px))`,
         // Each wedge points a different way, and in game the topping
         // is TILTED to sit square in its wedge rather than all five
         // pointing straight up. Slot 0 is the top wedge (no tilt) and

@@ -1,14 +1,5 @@
 /* ============================================================
-   theme.css - the ONLY place colors and shared styles live.
-   Built from design-system/DESIGN.md (mockup palette) then
-   levelled up using the ui-ux-pro-max "Modern Dark" guidance:
-   layered depth instead of flat fills, hairline highlights,
-   an accent glow behind the primary button, and hover lift on
-   cards. All effects are CSS-only (no JS animation) so the
-   page stays fast to use mid-battle.
-
-   Components use the var(--...) names, never raw hex, so
-   restyling the whole site = editing this one block.
+   theme.css
    ============================================================ */
 
 :root {
@@ -806,10 +797,7 @@ h3 { font-size: 18px; }
 
 
 /* ============================================================
-   ROSTER: toolbar, sort controls and section headings
-   The layout follows paimon.moe - a "Sort by" DROP-DOWN with a
-   separate ascending/descending button beside it, and the results
-   split into labelled sections instead of one long list.
+   ROSTER
    ============================================================ */
 
 .roster-toolbar {
@@ -918,9 +906,6 @@ h3 { font-size: 18px; }
 
 /* ============================================================
    COOKIE ROSTER GRID
-   auto-fill means the browser fits as many 150px cards per row as
-   the window allows - so a wide screen shows many more, which is
-   the point of going full width.
    ============================================================ */
 
 /* a touch of padding so a card's hover-lift and coloured edge
@@ -1859,22 +1844,35 @@ input[type="number"] {
 
 
 /* ============================================================
-   TOPPING BOARD - the in-game star
-   The artwork is the game's own (assets/topping-board/, taken
-   from the wiki at 272px). The tart's jewelled frame is baked
-   into each flavour's image, so swapping the tart swaps the
-   whole board exactly as the game does.
-
-   The five toppings sit INSIDE the star's wedges - they are not
-   a ring of buttons around the outside. ToppingCircle.tsx places
-   them with percentages so the board scales as one unit.
+   TOPPING BOARD
    ============================================================ */
 .topping-board-wrap { display: flex; flex-direction: column; align-items: center; }
 
 .topping-board {
     position: relative;
-    /* one number controls the whole thing */
-    width: min(320px, 78vw);
+    /* ---- SIZING KNOBS (edit here to retune the board) ----
+       --board-size        overall board width
+       --wedge-radius      how far each topping sits from centre
+                           (any CSS length: % of board, px, rem…)
+       --topping-width     size of a placed topping (% of board)
+       --empty-width       size of the "+" empty-slot marker    */
+    --board-size: min(320px, 78vw);
+    --wedge-radius: 21%;
+    --topping-width: 27%;
+    --empty-width: 13%;
+
+    /* Per-slot fine-tune. The star artwork isn't perfectly 5-fold
+       symmetric, so each wedge gets a tiny nudge from the shared
+       radius. Percentages of the board width, so the offsets keep
+       their proportion on mobile. Tuned in ToppingDemoPage on a
+       200px board; conversion: N/200 * 100. */
+    --slot-0-dx: -0.5%;   --slot-0-dy: -2.5%;
+    --slot-1-dx:  1.5%;   --slot-1-dy: -1.5%;
+    --slot-2-dx:  0.5%;   --slot-2-dy:  0.5%;
+    --slot-3-dx: -2.5%;   --slot-3-dy:  0%;
+    --slot-4-dx: -2.5%;   --slot-4-dy: -1%;
+
+    width: var(--board-size);
     aspect-ratio: 1;
 }
 
@@ -1917,7 +1915,7 @@ input[type="number"] {
    that aspect so the container isn't wasting horizontal space,
    and size it to fill the star's wedge tray. */
 .topping-wedge.filled {
-    width: 24%;
+    width: var(--topping-width);
     aspect-ratio: 120 / 175;
 }
 .topping-wedge.filled img {
@@ -1935,7 +1933,7 @@ input[type="number"] {
    Deliberately much smaller than a topping. It only has to say
    "something goes here", and a big disc buried the star's art. */
 .topping-wedge:not(.filled) {
-    width: 13%;
+    width: var(--empty-width);
     aspect-ratio: 1;
     border-radius: 50%;
     background: rgba(0, 0, 0, 0.30);
@@ -1983,7 +1981,7 @@ input[type="number"] {
 
 
 /* ============================================================
-   TEAM OVERVIEW - the at-a-glance summary
+   TEAM OVERVIEW
    ============================================================ */
 .team-overview {
     margin-top: 24px;
@@ -2076,7 +2074,7 @@ input[type="number"] {
 
 
 /* ============================================================
-   LEVELLING (level / ascension / awakening) + match badges
+   LEVELLING
    ============================================================ */
 .levelling { display: flex; flex-direction: column; gap: 16px; }
 .levelling-level .input { width: 110px; }
