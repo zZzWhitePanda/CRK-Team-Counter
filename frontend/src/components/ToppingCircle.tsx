@@ -30,26 +30,35 @@ interface ToppingCircleProps {
 }
 
 // Each of the 5 slots sits at a 72-degree interval around the board.
-// The actual distance from the centre lives in CSS as --wedge-radius
-// on .topping-board, so it can be tuned alongside the other sizing
-// knobs in theme.css without touching this file.
-// Per-slot fine-tune. The star artwork isn't perfectly 5-fold
-// symmetric, so each wedge gets a tiny nudge from the shared radius.
+// The shared distance from centre lives in CSS as --wedge-radius;
+// each wedge then gets a tiny per-slot nudge because the star art
+// isn't perfectly 5-fold symmetric. The two nudge tables exist
+// because the plain "none" board asset is a different aspect ratio
+// (272x272) to every tart board (272x281), so the star sits in a
+// slightly different spot in each — separate calibrations keep
+// both cases lined up.
 // Percentages of the board width, so they scale on mobile. Kept
 // here (not in theme.css) so a wrapper element's inline
 // --slot-N-dx can override — theme.css sitting on .topping-board
 // itself would beat any inherited value.
-const SLOT_NUDGE: Array<{dx: string; dy: string}> = [
+const SLOT_NUDGE_TART: Array<{dx: string; dy: string}> = [
     { dx: '-0.31%', dy: '-1.56%' },
     { dx:  '0.94%', dy: '-0.94%' },
     { dx:  '0.31%', dy:  '0.31%' },
     { dx: '-1.56%', dy:  '0%'    },
     { dx: '-1.56%', dy: '-0.63%' },
 ];
+const SLOT_NUDGE_NONE: Array<{dx: string; dy: string}> = [
+    { dx: '-0.51%', dy: '-0.16%' },
+    { dx:  '1.94%', dy:  '0.66%' },
+    { dx:  '0.91%', dy:  '2.91%' },
+    { dx: '-1.56%', dy:  '2.6%'  },
+    { dx: '-2.16%', dy:  '0.57%' },
+];
 
-function slotPosition(i: number) {
+function slotPosition(i: number, hasTart: boolean) {
     const angle = (-90 + i * 72) * (Math.PI / 180);   // degrees -> radians
-    const n = SLOT_NUDGE[i];
+    const n = (hasTart ? SLOT_NUDGE_TART : SLOT_NUDGE_NONE)[i];
     return {
         left: `calc(50% + var(--wedge-radius) * ${Math.cos(angle).toFixed(4)} + var(--slot-${i}-dx, ${n.dx}))`,
         top:  `calc(50% + var(--wedge-radius) * ${Math.sin(angle).toFixed(4)} + var(--slot-${i}-dy, ${n.dy}))`,
@@ -88,7 +97,7 @@ export function ToppingCircle({ slots, tart, onChange }: ToppingCircleProps) {
 
                 {/* one topping sitting in each of the five wedges */}
                 {slots.map((slot, i) => {
-                    const pos = slotPosition(i);
+                    const pos = slotPosition(i, tart !== null);
                     const topping = slot ? TOPPINGS.find(t => t.key === slot.toppingKey) : null;
                     return (
                         <button
