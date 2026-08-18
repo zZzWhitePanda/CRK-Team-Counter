@@ -1864,13 +1864,13 @@ input[type="number"] {
     /* Per-slot fine-tune. The star artwork isn't perfectly 5-fold
        symmetric, so each wedge gets a tiny nudge from the shared
        radius. Percentages of the board width, so the offsets keep
-       their proportion on mobile. Tuned in ToppingDemoPage on a
-       200px board; conversion: N/200 * 100. */
-    --slot-0-dx: -0.5%;   --slot-0-dy: -2.5%;
-    --slot-1-dx:  1.5%;   --slot-1-dy: -1.5%;
-    --slot-2-dx:  0.5%;   --slot-2-dy:  0.5%;
-    --slot-3-dx: -2.5%;   --slot-3-dy:  0%;
-    --slot-4-dx: -2.5%;   --slot-4-dy: -1%;
+       their proportion on mobile. Tuned in ToppingDemoPage against
+       the 320px production board; conversion: N/320 * 100. */
+    --slot-0-dx: -0.31%;  --slot-0-dy: -1.56%;
+    --slot-1-dx:  0.94%;  --slot-1-dy: -0.94%;
+    --slot-2-dx:  0.31%;  --slot-2-dy:  0.31%;
+    --slot-3-dx: -1.56%;  --slot-3-dy:  0%;
+    --slot-4-dx: -1.56%;  --slot-4-dy: -0.63%;
 
     width: var(--board-size);
     aspect-ratio: 1;
