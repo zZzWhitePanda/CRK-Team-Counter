@@ -22,6 +22,7 @@ import { CookiesPage } from './pages/CookiesPage';
 import { ProfilePage } from './pages/ProfilePage';
 import { SettingsPage } from './pages/SettingsPage';
 import { AdminPage } from './pages/AdminPage';
+import { ToppingDemoPage } from './pages/ToppingDemoPage';
 import { useAuth } from './auth';
 
 export function App() {
@@ -66,6 +67,7 @@ export function App() {
                             <Route path="/u/:userId" element={<ProfilePage />} />
                             <Route path="/admin" element={<AdminPage />} />
                             <Route path="/settings" element={<SettingsPage />} />
+                            <Route path="/topping-demo" element={<ToppingDemoPage />} />
                         </Routes>
                     </main>
                 </div>
