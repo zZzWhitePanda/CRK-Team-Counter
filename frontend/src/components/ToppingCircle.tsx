@@ -33,15 +33,26 @@ interface ToppingCircleProps {
 // The actual distance from the centre lives in CSS as --wedge-radius
 // on .topping-board, so it can be tuned alongside the other sizing
 // knobs in theme.css without touching this file.
+// Per-slot fine-tune. The star artwork isn't perfectly 5-fold
+// symmetric, so each wedge gets a tiny nudge from the shared radius.
+// Percentages of the board width, so they scale on mobile. Kept
+// here (not in theme.css) so a wrapper element's inline
+// --slot-N-dx can override — theme.css sitting on .topping-board
+// itself would beat any inherited value.
+const SLOT_NUDGE: Array<{dx: string; dy: string}> = [
+    { dx: '-0.31%', dy: '-1.56%' },
+    { dx:  '0.94%', dy: '-0.94%' },
+    { dx:  '0.31%', dy:  '0.31%' },
+    { dx: '-1.56%', dy:  '0%'    },
+    { dx: '-1.56%', dy: '-0.63%' },
+];
+
 function slotPosition(i: number) {
     const angle = (-90 + i * 72) * (Math.PI / 180);   // degrees -> radians
-    // Per-slot nudge variables (--slot-N-dx, --slot-N-dy) default to
-    // no-op, so setting them lets the demo page (or a future per-slot
-    // tune-up in theme.css) shift any one wedge without touching the
-    // others.
+    const n = SLOT_NUDGE[i];
     return {
-        left: `calc(50% + var(--wedge-radius) * ${Math.cos(angle).toFixed(4)} + var(--slot-${i}-dx, 0px))`,
-        top:  `calc(50% + var(--wedge-radius) * ${Math.sin(angle).toFixed(4)} + var(--slot-${i}-dy, 0px))`,
+        left: `calc(50% + var(--wedge-radius) * ${Math.cos(angle).toFixed(4)} + var(--slot-${i}-dx, ${n.dx}))`,
+        top:  `calc(50% + var(--wedge-radius) * ${Math.sin(angle).toFixed(4)} + var(--slot-${i}-dy, ${n.dy}))`,
         // Each wedge points a different way, and in game the topping
         // is TILTED to sit square in its wedge rather than all five
         // pointing straight up. Slot 0 is the top wedge (no tilt) and
