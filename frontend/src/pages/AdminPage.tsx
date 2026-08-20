@@ -1,19 +1,4 @@
-// ============================================================
-// AdminPage.tsx - the staff panel, at /admin.
-//
-// What you see depends on your top title:
-//
-//   Mod   - delete any community build
-//   Admin - all of the above, plus award the non-staff preset
-//           titles (Mod, OG, Content Creator), and ban accounts
-//   Owner - all of the above, plus custom titles and IP bans
-//
-// Every button here is backed by a check on the SERVER against
-// the person's titles. Hiding a control is only tidiness - a bad
-// actor calling the API by hand still gets a 403. So the
-// owner-only bits are safe to render for a moderator too, but
-// there's no point showing them.
-// ============================================================
+// the staff panel, what shows depends on your title
 
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
@@ -31,9 +16,7 @@ import { TitleBadges } from '../components/TitleBadge';
 import { TeamRow } from '../components/TeamRow';
 import { useAuth } from '../auth';
 
-// ---- ban duration presets -----------------------------------
-// "How long should the ban last" - the user picks one of these,
-// or enters their own number of days. null minutes = permanent.
+// ban lengths, null = permanent
 const DURATIONS: { label: string; minutes: number | null }[] = [
     { label: '1 hour',   minutes: 60 },
     { label: '1 day',    minutes: 60 * 24 },
@@ -42,9 +25,7 @@ const DURATIONS: { label: string; minutes: number | null }[] = [
     { label: 'Permanent', minutes: null },
 ];
 
-// ---- title presets -----------------------------------------
-// The five presets carry fixed colours. Admins may award any of
-// the non-staff ones; owners may award all, plus custom titles.
+// the preset titles and their colours
 const PRESET_TITLES: (Title & { adminAssignable?: boolean })[] = [
     { name: 'Owner',           color: '#000000' },
     { name: 'Admin',           color: '#22D3EE' },
@@ -71,7 +52,7 @@ export function AdminPage() {
         if (authLoading) return;
         if (!isStaff) { setLoading(false); return; }
 
-        // moderators can list accounts too (only for looking - they can't act)
+        // mods can view accounts but not change them
         Promise.all([
             isAdmin ? getAllUsers() : Promise.resolve([]),
             getBuilds('likes'),
@@ -99,11 +80,10 @@ export function AdminPage() {
         );
     }
 
-    // rank string for the little badge next to the title
+    // label for the rank badge
     const rankLabel = isOwner ? 'Owner' : isAdmin ? 'Admin' : 'Mod';
 
-    // Rebuild an account row after a change (title change, ban…),
-    // so the list re-renders without a full refetch.
+    // update one row without refetching
     const updateUser = (updated: Partial<StaffUser> & { user_id: number }) =>
         setUsers(list => list.map(u =>
             u.user_id === updated.user_id ? { ...u, ...updated } : u));
@@ -135,13 +115,13 @@ export function AdminPage() {
 
             {error && <div className="error-box" role="alert" style={{ marginBottom: 16 }}>{error}</div>}
 
-            {/* ---- ACCOUNTS ---- */}
+            {/* accounts */}
             {tab === 'accounts' && isAdmin && (
                 <>
                     <ManageAccountForm
                         onLookup={u => setUsers(list => {
                             const other = list.filter(x => x.user_id !== u.user_id);
-                            // move it to the top so it's visible
+                            // move to the top
                             return [{ ...u, build_count: '0' } as StaffUser, ...other];
                         })}
                         onDone={updateUser}
@@ -164,7 +144,7 @@ export function AdminPage() {
                 </>
             )}
 
-            {/* ---- BUILDS ---- */}
+            {/* builds */}
             {tab === 'builds' && (
                 <div className="admin-list">
                     {builds.length === 0 && (
@@ -187,11 +167,7 @@ export function AdminPage() {
 }
 
 
-// ============================================================
-// The "Manage account" form at the top of the Accounts tab.
-// Takes an id or username, looks it up, then offers the staff
-// controls straight away (award title / ban / etc.).
-// ============================================================
+// look up an account by id or name, then act on it
 function ManageAccountForm({ onLookup, onDone, onError, isOwner }: {
     onLookup: (u: StaffUser) => void;
     onDone: (u: Partial<StaffUser> & { user_id: number }) => void;
@@ -250,11 +226,7 @@ function ManageAccountForm({ onLookup, onDone, onError, isOwner }: {
 }
 
 
-// ============================================================
-// One row in the Accounts list. A summary of the person, plus a
-// collapse-open button that reveals the same staff controls the
-// Manage form uses.
-// ============================================================
+// one row in the accounts list
 function AccountRow({ account, actingUserId, isOwner, onUpdate, onError }: {
     account: StaffUser;
     actingUserId: number;
@@ -312,11 +284,7 @@ function AccountRow({ account, actingUserId, isOwner, onUpdate, onError }: {
 }
 
 
-// ============================================================
-// The actual staff controls: award/remove titles, ban / un-ban.
-// Shared between the "Manage account" form (accepts id/name) and
-// the collapse under each row in the list.
-// ============================================================
+// the staff controls: titles and bans
 function ManageAccountControls({ account, onUpdated, onError, isOwner }: {
     account: StaffUser;
     onUpdated: (patch: Partial<StaffUser>) => void;
@@ -327,7 +295,7 @@ function ManageAccountControls({ account, onUpdated, onError, isOwner }: {
     const isBanned = account.banned_at !== null
         && (account.banned_until === null || new Date(account.banned_until) > new Date());
 
-    // ---- title picker ----
+    // title picker
     const [customName, setCustomName] = useState('');
     const [customColor, setCustomColor] = useState('#8B7CF6');
 
@@ -351,7 +319,7 @@ function ManageAccountControls({ account, onUpdated, onError, isOwner }: {
         } finally { setBusy(false); }
     }
 
-    // ---- ban form ----
+    // ban form
     const [banReason, setBanReason] = useState('');
     const [banMinutes, setBanMinutes] = useState<number | null>(60 * 24);
     const [customDays, setCustomDays] = useState('');
@@ -360,7 +328,7 @@ function ManageAccountControls({ account, onUpdated, onError, isOwner }: {
     async function submitBan(banning: boolean) {
         setBusy(true); onError('');
         try {
-            // Custom days overrides the preset if a valid number is typed.
+            // a typed number overrides the preset
             const days = customDays.trim() ? Number(customDays.trim()) : NaN;
             const minutes = Number.isFinite(days) && days > 0 ? days * 24 * 60 : banMinutes;
 
@@ -383,7 +351,7 @@ function ManageAccountControls({ account, onUpdated, onError, isOwner }: {
 
     return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
-            {/* ---- CURRENT TITLES ---- */}
+            {/* current titles */}
             <div>
                 <div className="field-label" style={{ marginBottom: 6 }}>Current titles</div>
                 <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
@@ -405,12 +373,12 @@ function ManageAccountControls({ account, onUpdated, onError, isOwner }: {
                 </div>
             </div>
 
-            {/* ---- ADD A TITLE ---- */}
+            {/* add a title */}
             <div>
                 <div className="field-label" style={{ marginBottom: 6 }}>Add a preset title</div>
                 <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                     {PRESET_TITLES.map(preset => {
-                        // admins may only award the non-staff presets
+                        // admins can't award staff titles
                         const allowed = isOwner || preset.adminAssignable === true;
                         return (
                             <button
@@ -455,7 +423,7 @@ function ManageAccountControls({ account, onUpdated, onError, isOwner }: {
                 )}
             </div>
 
-            {/* ---- BAN ---- */}
+            {/* ban */}
             <div>
                 <div className="field-label" style={{ marginBottom: 6 }}>
                     Ban {isBanned && <span className="muted">— currently banned</span>}
@@ -478,9 +446,7 @@ function ManageAccountControls({ account, onUpdated, onError, isOwner }: {
                                     {d.label}
                                 </button>
                             ))}
-                            {/* Wider than the other pills so the whole
-                                "Custom (days)" placeholder is readable -
-                                120px cut it off at "Custom (d". */}
+                            {/* wider so the placeholder fits */}
                             <input
                                 className="input"
                                 type="number"
@@ -515,10 +481,7 @@ function ManageAccountControls({ account, onUpdated, onError, isOwner }: {
 }
 
 
-// ============================================================
-// One community build in the Builds tab. Any moderator (or above)
-// can remove it.
-// ============================================================
+// one build in the builds tab
 function BuildAdminRow({ build, roster, onDeleted, onError }: {
     build: PlayerBuild;
     roster: Cookie[];

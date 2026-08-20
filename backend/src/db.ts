@@ -1,36 +1,21 @@
-// ============================================================
-// db.ts - the one place the backend talks to PostgreSQL from.
-//
-// A "Pool" is a set of reusable database connections. Opening a
-// connection is slow, so instead of connecting for every request
-// the pool keeps a few open and hands them out as needed.
-// Every other file imports { pool } from here, so if the
-// database location changes only .env has to change (NFR07).
-// ============================================================
+// the database connection pool (NFR07)
 
 import { Pool } from 'pg';
 import dotenv from 'dotenv';
 
-// load DATABASE_URL and PORT from the .env file
+// load settings from .env
 dotenv.config();
 
 export const pool = new Pool({
     connectionString: process.env.DATABASE_URL,
 
-    // Cloud databases (like Neon, where the live site's data
-    // lives) only accept encrypted connections, so SSL is turned
-    // on by setting DATABASE_SSL=true in that environment.
-    // The local database on my own machine doesn't use SSL,
-    // so locally the variable just stays unset.
+    // the cloud database needs SSL, the local one doesn't
     ssl: process.env.DATABASE_SSL === 'true'
         ? { rejectUnauthorized: false }
         : undefined,
 });
 
-// Small helper so route files can run a query in one line.
-// The $1/$2 placeholders in queries keep user input SEPARATE
-// from the SQL command - this is what blocks SQL injection
-// (NFR05: "typing tricks into the boxes" can't reach the DB).
+// run a query. $1 placeholders stop SQL injection (NFR05)
 export function query(text: string, params?: unknown[]) {
     return pool.query(text, params);
 }

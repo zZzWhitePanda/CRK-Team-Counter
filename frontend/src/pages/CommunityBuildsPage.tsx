@@ -1,8 +1,4 @@
-// ============================================================
-// CommunityBuildsPage.tsx - the most-liked community builds
-// (FR08), plus (when logged in) a form to submit your own build
-// (FR05) and like buttons on every build (FR06/FR07).
-// ============================================================
+// community builds list, submit form and likes (FR05-FR08)
 
 import React, { useEffect, useState } from 'react';
 import { Plus, Settings2, Gem, Heart, Eye, Sparkles, Clock } from 'lucide-react';
@@ -30,11 +26,11 @@ export function CommunityBuildsPage() {
     const [loaded, setLoaded] = useState(false);
     const [showAuth, setShowAuth] = useState(false);
     const [showForm, setShowForm] = useState(false);
-    // the build whose full details popup is open, if any
+    // the build whose popup is open
     const [openBuild, setOpenBuild] = useState<PlayerBuild | null>(null);
     const [sort, setSort] = useState<BuildSort>('likes');
 
-    // reload builds when the sort or login state changes.
+    // reload when the sort or login changes
     useEffect(() => {
         Promise.all([getBuilds(sort), getCookies()])
             .then(([topBuilds, cookies]) => { setBuilds(topBuilds); setRoster(cookies); })
@@ -42,11 +38,7 @@ export function CommunityBuildsPage() {
             .finally(() => setLoaded(true));
     }, [user, sort]);
 
-    // ---- view counting ----
-    // The browser sends a POST when the detail popup opens, and
-    // remembers per build in localStorage so a refresh doesn't
-    // run the number up. The key includes today's date so it can
-    // be counted again tomorrow.
+    // count a view, once per build per day
     function handleOpen(build: PlayerBuild) {
         setOpenBuild(build);
         const today = new Date().toISOString().slice(0, 10);
@@ -54,21 +46,21 @@ export function CommunityBuildsPage() {
         if (!localStorage.getItem(key)) {
             countBuildView(build.build_id).catch(() => {});
             localStorage.setItem(key, '1');
-            // reflect the new count on the card without a refetch
+            // update the card's count
             setBuilds(prev => prev.map(b =>
                 b.build_id === build.build_id ? { ...b, views: (b.views ?? 0) + 1 } : b));
         }
     }
 
-    // ---- liking (FR06/FR07) ----
+    // liking (FR06/FR07)
     async function handleLike(buildId: number) {
-        if (!user) { setShowAuth(true); return; }   // must be logged in
+        if (!user) { setShowAuth(true); return; }   // login needed
         try {
             const res = await likeBuild(buildId);
             const apply = (b: PlayerBuild) =>
                 b.build_id === buildId ? { ...b, likes: res.likes, likedByMe: res.likedByMe } : b;
             setBuilds(prev => prev.map(apply));
-            // keep the open popup's heart in step with the list
+            // update the open popup too
             setOpenBuild(prev => (prev ? apply(prev) : prev));
         } catch (err) {
             setError(err instanceof Error ? err.message : 'Could not like that.');
@@ -79,7 +71,7 @@ export function CommunityBuildsPage() {
         <div>
             <h1 style={{ marginBottom: 16 }}>Community Builds</h1>
 
-            {/* ---- sort + submit ---- */}
+            {/* sort and submit */}
             <div style={{ display: 'flex', gap: 8, marginBottom: 24, flexWrap: 'wrap', alignItems: 'center' }}>
                 <span className="sort-label">Sort by</span>
                 <SortPill icon={<Heart size={14} aria-hidden="true" />} label="Most liked"
@@ -101,7 +93,7 @@ export function CommunityBuildsPage() {
                 </button>
             </div>
 
-            {/* ---- submit form (logged-in only) ---- */}
+            {/* submit form */}
             {user && showForm && (
                 <SubmitForm
                     roster={roster}
@@ -114,36 +106,34 @@ export function CommunityBuildsPage() {
 
             {error && <div className="error-box" role="alert" style={{ marginBottom: 16 }}>{error}</div>}
 
-            {/* loading skeletons */}
+            {/* loading */}
             {!loaded && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
                     {Array.from({ length: 3 }).map((_, i) => <div key={i} className="skeleton" style={{ height: 160 }} />)}
                 </div>
             )}
 
-            {/* empty state */}
+            {/* nothing found */}
             {loaded && !error && builds.length === 0 && (
                 <div className="card">
                     <p>No community builds yet — {user ? 'be the first to submit one above!' : 'log in and be the first to submit one!'}</p>
                 </div>
             )}
 
-            {/* the build list - click a card for the full build */}
+            {/* the build list */}
             {builds.map((build, index) => (
                 <BuildCard
                     key={build.build_id}
                     build={build}
                     roster={roster}
-                    // Only show the rank badge when the order is
-                    // by likes - it doesn't make sense on "Newest"
+                    // rank badge only makes sense sorted by likes
                     rank={sort === 'likes' ? index + 1 : undefined}
                     onOpen={() => handleOpen(build)}
                     onLike={() => handleLike(build.build_id)}
                 />
             ))}
 
-            {/* everything the author saved: toppings, tarts, beascuits,
-                ascensions, levels and both teams' treasures */}
+            {/* the full build popup */}
             {openBuild && (
                 <BuildDetail
                     build={openBuild}
@@ -158,7 +148,7 @@ export function CommunityBuildsPage() {
     );
 }
 
-// ---- one of the four sort options ----
+// one sort option
 function SortPill({ icon, label, active, onClick }: {
     icon: React.ReactNode;
     label: string;
@@ -172,18 +162,14 @@ function SortPill({ icon, label, active, onClick }: {
     );
 }
 
-// ---- the submit-a-build form (its own component to keep state tidy) ----
-// This is where a full build is made: your counter team gets the full
-// customisation (toppings, tart, beascuit, ascension, level), the enemy
-// team gets what you can see (level + ascension), and each team has its
-// 3 treasures.
+// the submit a build form
 function SubmitForm({ roster, onSubmitted }: { roster: Cookie[]; onSubmitted: (b: PlayerBuild) => void }) {
-    // enemy side: cookie names + what you can see of each + treasures
+    // enemy side
     const [opponent, setOpponent] = useState<string[]>(['', '', '', '', '']);
     const [opponentInfo, setOpponentInfo] = useState<EnemyInfo[]>(() => Array.from({ length: 5 }, emptyEnemyInfo));
     const [enemyTreasures, setEnemyTreasures] = useState<TeamTreasures>(emptyTreasures);
 
-    // your side: cookie names + full builds + treasures
+    // your side
     const [counter, setCounter] = useState<string[]>(['', '', '', '', '']);
     const [counterBuilds, setCounterBuilds] = useState<CookieBuild[]>(() => Array.from({ length: 5 }, emptyBuild));
     const [yourTreasures, setYourTreasures] = useState<TeamTreasures>(emptyTreasures);
@@ -192,14 +178,11 @@ function SubmitForm({ roster, onSubmitted }: { roster: Cookie[]; onSubmitted: (b
     const [error, setError] = useState('');
     const [busy, setBusy] = useState(false);
 
-    // which editor popup is open, if any
+    // which editor popup is open
     const [editEnemy, setEditEnemy] = useState<number | null>(null);
     const [editMine, setEditMine] = useState<number | null>(null);
 
-    // ---- drag to reorder ----
-    // Order matters in game (front / middle / rear), so both teams
-    // can be rearranged. Each drag has to move the cookie names AND
-    // their parallel build/info arrays so a cookie keeps its gear.
+    // drag to reorder, moving the builds with the names
     const enemyDrag = useDragReorder((from, to) => {
         setOpponent(prev => moveItem(prev, from, to));
         setOpponentInfo(prev => moveItem(prev, from, to));
@@ -212,13 +195,10 @@ function SubmitForm({ roster, onSubmitted }: { roster: Cookie[]; onSubmitted: (b
     async function handleSubmit() {
         const opp = opponent.filter(n => n);
         const cnt = counter.filter(n => n);
-        // The enemy team is OPTIONAL - leaving it empty posts a
-        // general-purpose team ("this works against anything").
+        // the enemy team is optional
         if (cnt.length === 0) { setError('Pick at least one cookie for your team.'); return; }
 
-        // The full build details (toppings/beascuit/treasures/etc) are
-        // saved in the build's gearSetup field so nothing is lost.
-        // Only the cookies for slots that are actually filled are kept.
+        // the full details, saved in gearSetup
         const details = {
             enemyInfo: opponent.map((n, i) => n ? { cookie: n, ...opponentInfo[i] } : null).filter(Boolean),
             enemyTreasures: enemyTreasures.filter(Boolean),
@@ -245,7 +225,7 @@ function SubmitForm({ roster, onSubmitted }: { roster: Cookie[]; onSubmitted: (b
                 leave it empty to post a team that works against anything.
             </p>
 
-            {/* ---- enemy team (level + stars only) ---- */}
+            {/* enemy team */}
             <p className="field-label" style={{ color: 'var(--color-enemy)' }}>
                 Enemy team you're countering
                 <span className="muted" style={{ fontWeight: 400, marginLeft: 8 }}>optional</span>
@@ -277,7 +257,7 @@ function SubmitForm({ roster, onSubmitted }: { roster: Cookie[]; onSubmitted: (b
             </h4>
             <TreasureSelector treasures={enemyTreasures} onChange={setEnemyTreasures} />
 
-            {/* ---- your counter team (full build) ---- */}
+            {/* your counter team */}
             <p className="field-label" style={{ color: 'var(--color-ally)', marginTop: 24 }}>Your counter team</p>
             <div className="picker-row" style={{ marginBottom: 12 }}>
                 {counter.map((name, i) => {
@@ -308,9 +288,7 @@ function SubmitForm({ roster, onSubmitted }: { roster: Cookie[]; onSubmitted: (b
             </h4>
             <TreasureSelector treasures={yourTreasures} onChange={setYourTreasures} />
 
-            {/* ---- what you've actually set, all in one place ----
-                 Without this you'd have to open each cookie's Build
-                 popup again to remember what you gave it. */}
+            {/* a summary of what you've set */}
             <TeamOverview
                 team={counter}
                 builds={counterBuilds}
@@ -319,8 +297,8 @@ function SubmitForm({ roster, onSubmitted }: { roster: Cookie[]; onSubmitted: (b
                 onEdit={i => setEditMine(i)}
             />
 
-            {/* ---- note ---- */}
-            <label htmlFor="build-note" className="field-label" style={{ marginTop: 24 }}>Note (how it works — optional, max 1000)</label>
+            {/* note */}
+            <label htmlFor="build-note" className="field-label" style={{ marginTop: 24 }}>Note (optional, max 1000)</label>
             <textarea
                 id="build-note"
                 className="input"
@@ -337,7 +315,7 @@ function SubmitForm({ roster, onSubmitted }: { roster: Cookie[]; onSubmitted: (b
                 {busy ? 'Submitting…' : 'Post build'}
             </button>
 
-            {/* editor popups */}
+            {/* the editor popups */}
             {editEnemy !== null && roster.find(c => c.name === opponent[editEnemy]) && (
                 <EnemyCookieEditor
                     cookie={roster.find(c => c.name === opponent[editEnemy])!}

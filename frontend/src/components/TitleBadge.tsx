@@ -1,20 +1,10 @@
-// ============================================================
-// TitleBadge.tsx - the coloured badges next to someone's name.
-//
-// A user has an ARRAY of titles now: e.g. an owner + content
-// creator would show both. Each title carries its own colour,
-// picked by the owner when it was awarded. This component only
-// draws them - it doesn't decide what anything means.
-//
-// The old version got a title's colour from a fixed lookup by
-// name; that has moved into the database (users.titles[i].color).
-// ============================================================
+// coloured title badges next to a name
 
 import { Title } from '../api';
 
 interface Props {
     titles: Title[] | undefined | null;
-    small?: boolean;      // for build cards, where space is tight
+    small?: boolean;      // for tight spaces
 }
 
 export function TitleBadges({ titles, small }: Props) {
@@ -35,10 +25,7 @@ export function TitleBadges({ titles, small }: Props) {
     );
 }
 
-/**
- * Draws a SINGLE title. Kept because a few places (e.g. staff-only
- * indicators) hand-build a single badge rather than reading a list.
- */
+// draws a single title
 export function TitleBadge({ title, small }: { title: Title | null; small?: boolean }) {
     if (!title) return null;
     return <TitleBadges titles={[title]} small={small} />;

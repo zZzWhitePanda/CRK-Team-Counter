@@ -1,16 +1,4 @@
-// ============================================================
-// SettingsPage.tsx - the account and appearance settings.
-//
-// The old version only changed one highlight colour. This one
-// changes the site's real colours: pick a ready-made theme, build
-// your own, add a background picture, and keep your own themes to
-// switch between later.
-//
-// Saved themes live on the ACCOUNT, so they follow you to another
-// computer. A copy is kept in the browser too, so the site paints
-// in your colours immediately instead of flashing the default
-// while it waits for the server.
-// ============================================================
+// account and appearance settings
 
 import { useEffect, useState } from 'react';
 import { LogOut, Check, Palette, Plus, Trash2, Shield } from 'lucide-react';
@@ -36,14 +24,14 @@ export function SettingsPage() {
     const [problem, setProblem] = useState('');
     const [message, setMessage] = useState('');
 
-    // load this account's saved themes
+    // load saved themes
     useEffect(() => {
         if (!user) { setSaved([]); return; }
         getMyThemes().then(setSaved).catch(() => {});
     }, [user]);
 
     async function handleSaveTheme(next: Theme, name: string) {
-        commitTheme(next);          // use it now, and remember it
+        commitTheme(next);          // use it and save it
         setEditing(false);
         setProblem(''); setMessage('');
 
@@ -54,7 +42,7 @@ export function SettingsPage() {
         setBusy(true);
         try {
             const preset = await saveThemePreset(name, next);
-            // replace it in the list if the name already existed
+            // replace if the name is already used
             setSaved(list => [preset, ...list.filter(t => t.theme_id !== preset.theme_id)]);
             setMessage(`Saved "${name}" to your themes.`);
         } catch (err) {
@@ -82,7 +70,7 @@ export function SettingsPage() {
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 16, maxWidth: 860 }}>
 
-                {/* ---- Account ---- */}
+                {/* account */}
                 <div className="card">
                     <h2 style={{ fontSize: 18, marginBottom: 16 }}>Account</h2>
                     {user ? (
@@ -112,7 +100,7 @@ export function SettingsPage() {
                     )}
                 </div>
 
-                {/* ---- Ready-made themes ---- */}
+                {/* preset themes */}
                 <div className="card">
                     <h2 style={{ fontSize: 18, marginBottom: 6 }}>Theme</h2>
                     <p className="muted" style={{ fontSize: 14, marginBottom: 18 }}>
@@ -134,7 +122,7 @@ export function SettingsPage() {
                     </div>
                 </div>
 
-                {/* ---- Your own themes ---- */}
+                {/* your themes */}
                 <div className="card">
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', marginBottom: 6 }}>
                         <h2 style={{ fontSize: 18 }}>Your themes</h2>
@@ -193,7 +181,7 @@ export function SettingsPage() {
     );
 }
 
-// ---- one theme in the grid: a little preview of its colours ----
+// one theme in the grid
 function ThemeCard({ theme, selected, onPick, onDelete }: {
     theme: Theme;
     selected: boolean;
@@ -203,8 +191,7 @@ function ThemeCard({ theme, selected, onPick, onDelete }: {
     return (
         <div className={'theme-card' + (selected ? ' selected' : '')}>
             <button className="theme-card-main" onClick={onPick} title={`Use ${theme.name}`}>
-                {/* a miniature of the page: background, a card on it,
-                    and an accent button - so you can see what you get */}
+                {/* a mini preview of the page */}
                 <span className="theme-preview" style={{ background: theme.colors.background }}>
                     {theme.backgroundImage && (
                         <span className="theme-preview-image"

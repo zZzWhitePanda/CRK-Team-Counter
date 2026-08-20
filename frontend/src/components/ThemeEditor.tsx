@@ -1,15 +1,4 @@
-// ============================================================
-// ThemeEditor.tsx - build your own theme.
-//
-// Every change previews LIVE across the whole site, because
-// editing calls setTheme() which sets the CSS variables straight
-// away. Nothing is remembered until "Save theme" is pressed, and
-// Cancel puts back whatever was on before.
-//
-// A theme is only four colours plus an optional background
-// picture - everything else the stylesheet needs is worked out
-// from those by applyTheme() in theme.ts.
-// ============================================================
+// build your own theme, with a live preview
 
 import { useEffect, useRef, useState } from 'react';
 import { Upload, Trash2, Check, RotateCcw, Image as ImageIcon } from 'lucide-react';
@@ -18,7 +7,7 @@ import { fileToBackgroundDataUri } from '../avatarUpload';
 
 interface Props {
     theme: Theme;
-    // called on every keystroke / colour drag, for the live preview
+    // runs on every change, for the preview
     onPreview: (theme: Theme) => void;
     onSave: (theme: Theme, name: string) => void;
     onCancel: () => void;
@@ -38,10 +27,10 @@ export function ThemeEditor({ theme, onPreview, onSave, onCancel, busy }: Props)
     const [problem, setProblem] = useState('');
     const fileInput = useRef<HTMLInputElement>(null);
 
-    // whatever was on before editing started, so Cancel can restore it
+    // the theme before editing, for Cancel
     const original = useRef<Theme>(theme);
 
-    // push every edit up so the whole site previews it
+    // preview every edit
     useEffect(() => { onPreview(draft); }, [draft]);
 
     function setColor(key: keyof ThemeColors, value: string) {
@@ -52,8 +41,7 @@ export function ThemeEditor({ theme, onPreview, onSave, onCancel, busy }: Props)
         if (!file) return;
         setProblem('');
         try {
-            // shrunk in the browser first - a phone photo is far too
-            // big to keep in a database row
+            // shrunk in the browser first
             const dataUri = await fileToBackgroundDataUri(file);
             setDraft(d => ({ ...d, backgroundImage: dataUri }));
         } catch (err) {
@@ -63,7 +51,7 @@ export function ThemeEditor({ theme, onPreview, onSave, onCancel, busy }: Props)
     }
 
     function handleCancel() {
-        onPreview(original.current);   // undo the live preview
+        onPreview(original.current);   // undo the preview
         onCancel();
     }
 
@@ -74,7 +62,7 @@ export function ThemeEditor({ theme, onPreview, onSave, onCancel, busy }: Props)
                 Changes preview live across the whole site.
             </p>
 
-            {/* ---- name ---- */}
+            {/* name */}
             <label htmlFor="theme-name" className="field-label">Name</label>
             <input
                 id="theme-name"
@@ -86,7 +74,7 @@ export function ThemeEditor({ theme, onPreview, onSave, onCancel, busy }: Props)
                 placeholder="My theme"
             />
 
-            {/* ---- the four colours ---- */}
+            {/* the four colours */}
             <div className="theme-fields">
                 {FIELDS.map(field => (
                     <div key={field.key} className="theme-field">
@@ -95,7 +83,7 @@ export function ThemeEditor({ theme, onPreview, onSave, onCancel, busy }: Props)
                             <div className="muted" style={{ fontSize: 12 }}>{field.help}</div>
                         </div>
 
-                        {/* the OS colour picker */}
+                        {/* colour picker */}
                         <input
                             type="color"
                             className="theme-swatch"
@@ -103,7 +91,7 @@ export function ThemeEditor({ theme, onPreview, onSave, onCancel, busy }: Props)
                             value={draft.colors[field.key]}
                             onChange={e => setColor(field.key, e.target.value)}
                         />
-                        {/* …and the hex code, for typing an exact colour */}
+                        {/* hex code */}
                         <input
                             className="input theme-hex"
                             aria-label={`${field.label} hex code`}
@@ -111,8 +99,7 @@ export function ThemeEditor({ theme, onPreview, onSave, onCancel, busy }: Props)
                             maxLength={7}
                             onChange={e => {
                                 const v = e.target.value;
-                                // only push it through once it's a real colour,
-                                // so the site doesn't flicker while typing
+                                // wait for a valid colour before applying
                                 setDraft(d => ({ ...d, colors: { ...d.colors, [field.key]: v } }));
                             }}
                         />
@@ -120,7 +107,7 @@ export function ThemeEditor({ theme, onPreview, onSave, onCancel, busy }: Props)
                 ))}
             </div>
 
-            {/* ---- background picture ---- */}
+            {/* background picture */}
             <div className="theme-background">
                 <div className="theme-field-label" style={{ marginBottom: 8 }}>
                     <ImageIcon size={15} aria-hidden="true" /> Background image
@@ -172,7 +159,7 @@ export function ThemeEditor({ theme, onPreview, onSave, onCancel, busy }: Props)
 
             {problem && <div className="error-box" role="alert" style={{ marginTop: 14 }}>{problem}</div>}
 
-            {/* ---- actions ---- */}
+            {/* buttons */}
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 22 }}>
                 <button className="btn-primary" disabled={busy}
                     onClick={() => onSave({ ...draft, name: name.trim() || 'My theme', custom: true },

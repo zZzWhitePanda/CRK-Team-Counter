@@ -1,14 +1,4 @@
-// ============================================================
-// App.tsx - the page frame: sidebar on the left, a top bar with
-// the login button, and the router swaps which page shows in the
-// content area. "/" redirects to the Counter Tool since that's
-// the main feature people come for.
-//
-// The top bar's username is a LINK to your own profile (/u/<name>),
-// which is how you get to the profile section. Everybody's profile
-// lives at the same kind of address, so clicking someone's name on
-// a community build lands you on exactly the same page.
-// ============================================================
+// page layout and routing
 
 import { useState } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, Link } from 'react-router-dom';
@@ -34,7 +24,7 @@ export function App() {
             <div className="app-layout">
                 <Sidebar />
                 <div className="main-column">
-                    {/* top bar: shows who's logged in, or a log-in button */}
+                    {/* top bar */}
                     <header className="topbar">
                         {user ? (
                             <div className="topbar-user">
@@ -61,9 +51,7 @@ export function App() {
                             <Route path="/builds" element={<CommunityBuildsPage />} />
                             <Route path="/counter" element={<CounterToolPage />} />
                             <Route path="/cookies" element={<CookiesPage />} />
-                            {/* Anyone's profile, addressed by account NUMBER
-                                (/u/7) rather than name - so renaming never
-                                breaks a link somebody saved. */}
+                            {/* profile by user id, not name */}
                             <Route path="/u/:userId" element={<ProfilePage />} />
                             <Route path="/admin" element={<AdminPage />} />
                             <Route path="/settings" element={<SettingsPage />} />

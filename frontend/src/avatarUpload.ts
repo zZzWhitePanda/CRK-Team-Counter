@@ -1,37 +1,12 @@
-// ============================================================
-// avatarUpload.ts - turning a chosen image file into something
-// small enough to store.
-//
-// A photo off a phone is 3-5 MB, which is far too big to keep in
-// a database row. Rather than upload the file and shrink it on the
-// server, the BROWSER does the work first:
-//
-//   1. read the file the user picked
-//   2. draw it onto a hidden 128x128 canvas, cropped to a square
-//      from the middle so faces don't get squashed
-//   3. read the canvas back out as a compressed JPEG data URI
-//
-// The result is roughly 10-15 KB, so it fits comfortably in the
-// users table and there are no uploaded files to lose when the
-// free hosting restarts and wipes the server's disk.
-//
-// The backend checks the size and file type again when it arrives
-// (never trust the browser - NFR05).
-// ============================================================
+// shrinks a picked image in the browser before saving it
 
-export const AVATAR_SIZE = 128;         // pixels, square
-export const MAX_FILE_BYTES = 8 * 1024 * 1024;   // 8 MB before shrinking
+export const AVATAR_SIZE = 128;         // square, in pixels
+export const MAX_FILE_BYTES = 8 * 1024 * 1024;   // max file size
 
-// A theme's background picture covers the whole page, so it needs
-// to be far bigger than an avatar - but still small enough to keep
-// in a database row. 1600px wide at JPEG quality 0.72 lands around
-// 150-400 KB, which looks sharp on a normal screen.
+// background pictures are bigger than avatars
 export const BACKGROUND_WIDTH = 1600;
 
-/**
- * Shrink an image file to a square data URI ready to save.
- * Rejects with a friendly message if the file isn't a usable image.
- */
+// shrink an image file to a square data URI
 export function fileToAvatarDataUri(file: File): Promise<string> {
     return new Promise((resolve, reject) => {
         if (!file.type.startsWith('image/')) {
@@ -47,7 +22,7 @@ export function fileToAvatarDataUri(file: File): Promise<string> {
         const image = new Image();
 
         image.onload = () => {
-            URL.revokeObjectURL(objectUrl);      // done with the temporary link
+            URL.revokeObjectURL(objectUrl);      // done with the temp link
             try {
                 const canvas = document.createElement('canvas');
                 canvas.width = AVATAR_SIZE;
@@ -55,14 +30,13 @@ export function fileToAvatarDataUri(file: File): Promise<string> {
                 const ctx = canvas.getContext('2d');
                 if (!ctx) throw new Error('canvas unavailable');
 
-                // Crop to a centred square: take the biggest square that
-                // fits, from the middle of the picture.
+                // crop to a centred square
                 const side = Math.min(image.width, image.height);
                 const sx = (image.width - side) / 2;
                 const sy = (image.height - side) / 2;
                 ctx.drawImage(image, sx, sy, side, side, 0, 0, AVATAR_SIZE, AVATAR_SIZE);
 
-                // 0.85 quality JPEG: small file, still looks clean at 128px
+                // jpeg, small but still clean
                 resolve(canvas.toDataURL('image/jpeg', 0.85));
             } catch {
                 reject(new Error('That image could not be processed — try a different one.'));
@@ -78,14 +52,7 @@ export function fileToAvatarDataUri(file: File): Promise<string> {
     });
 }
 
-/**
- * Shrink a picture for use as the page background.
- *
- * Unlike the avatar this is NOT cropped square - the whole picture
- * is kept and only scaled down, because it gets stretched to cover
- * the page anyway. Anything already narrower than BACKGROUND_WIDTH
- * is left at its own size rather than being blown up and blurred.
- */
+// shrink a picture for the page background, not cropped
 export function fileToBackgroundDataUri(file: File): Promise<string> {
     return new Promise((resolve, reject) => {
         if (!file.type.startsWith('image/')) {
@@ -103,7 +70,7 @@ export function fileToBackgroundDataUri(file: File): Promise<string> {
         image.onload = () => {
             URL.revokeObjectURL(objectUrl);
             try {
-                // scale down to fit the target width, never up
+                // scale down only
                 const scale = Math.min(1, BACKGROUND_WIDTH / image.width);
                 const canvas = document.createElement('canvas');
                 canvas.width = Math.round(image.width * scale);
@@ -115,8 +82,7 @@ export function fileToBackgroundDataUri(file: File): Promise<string> {
 
                 const dataUri = canvas.toDataURL('image/jpeg', 0.72);
 
-                // The backend refuses a theme over ~1.5 MB, so say so
-                // here rather than letting the save fail later.
+                // backend refuses themes over ~1.5 MB
                 const bytes = Math.floor(dataUri.length * 3 / 4);
                 if (bytes > 1_200_000) {
                     reject(new Error('That image is too detailed to save — try a smaller or simpler one.'));

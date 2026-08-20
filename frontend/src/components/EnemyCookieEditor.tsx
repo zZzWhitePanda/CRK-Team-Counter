@@ -1,12 +1,4 @@
-// ============================================================
-// EnemyCookieEditor.tsx - the small popup for an ENEMY cookie.
-//
-// In-game you can only see an opponent cookie's level, ascension
-// and (for Ancient/Beast cookies) awakening - NOT their toppings,
-// tart or beascuit. So the enemy editor is deliberately limited to
-// those. Contrast with CookieBuildEditor, which is the full build
-// for your own cookies.
-// ============================================================
+// popup for an enemy cookie - only level and stars
 
 import { X } from 'lucide-react';
 import { Cookie, cookieImageUrl } from '../api';

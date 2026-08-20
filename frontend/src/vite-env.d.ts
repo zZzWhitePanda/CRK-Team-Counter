@@ -1,3 +1,2 @@
-// Tells TypeScript about Vite-specific things like
-// import.meta.env (used in api.ts for the backend address).
+// tells TypeScript about import.meta.env
 /// <reference types="vite/client" />

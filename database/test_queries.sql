@@ -1,13 +1,6 @@
--- ============================================================
 -- CRK Team Builder - Database Tests
 -- Flynn Zipsin - VCE Software Development SAT
---
--- Run with:  psql -d crk_team_builder -f test_queries.sql
---
--- These queries prove the schema actually does what the SRS
--- says it should, BEFORE any backend code exists. Each test
--- says what result to expect.
--- ============================================================
+-- Checks the schema does what the SRS says. Each test lists what to expect.
 
 \echo '=== TEST 1: roster loads (fills the drop-downs, FR01) ==='
 \echo 'Expect: 190 cookies, and 0 missing an image filename'

@@ -1,13 +1,4 @@
-// ============================================================
-// auth.tsx - keeps track of who is logged in, for the whole app.
-//
-// React "context" lets any page read the current user without
-// passing it down through every component. Any component can call
-// useAuth() to get { user, login, signup, logout }.
-//
-// On first load, if we have a saved token, we ask the backend
-// "who am I" so the user stays logged in after a refresh.
-// ============================================================
+// login state for the whole app
 
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import {
@@ -17,13 +8,11 @@ import {
 
 interface AuthState {
     user: AuthUser | null;
-    loading: boolean;          // true while we check the saved token
+    loading: boolean;          // checking saved token
     login: (email: string, password: string) => Promise<void>;
     signup: (username: string, email: string, password: string) => Promise<void>;
     logout: () => void;
-    // used by the profile page to change your username / picture.
-    // It lives here (not in the page) so the name and picture in the
-    // top bar update straight away, without a refresh.
+    // change username / picture
     saveProfile: (changes: {
         username?: string;
         avatar?: string | null;
@@ -37,12 +26,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const [user, setUser] = useState<AuthUser | null>(null);
     const [loading, setLoading] = useState(true);
 
-    // on startup, if there's a saved token, fetch the user
+    // load user from saved token
     useEffect(() => {
         if (!getToken()) { setLoading(false); return; }
         getMe()
             .then(res => setUser(res.user))
-            .catch(() => clearToken())   // token expired/invalid
+            .catch(() => clearToken())   // bad token
             .finally(() => setLoading(false));
     }, []);
 
@@ -67,8 +56,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         username?: string; avatar?: string | null; avatarData?: string | null;
     }) {
         const res = await updateProfile(changes);
-        // the username is baked into the login token, so a rename
-        // hands back a new one that has to replace the old
+        // rename gives a new token
         setToken(res.token);
         setUser(res.user);
         return res.user;
@@ -81,7 +69,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     );
 }
 
-// the hook every component uses to read/act on auth
+// auth hook
 export function useAuth(): AuthState {
     const ctx = useContext(AuthContext);
     if (!ctx) throw new Error('useAuth must be used inside <AuthProvider>');

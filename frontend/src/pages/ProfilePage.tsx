@@ -1,27 +1,4 @@
-// ============================================================
-// ProfilePage.tsx - a player's profile, at /u/<user id>.
-//
-// The address uses the account NUMBER, not the name (the same way
-// Roblox uses /users/<id>). That means changing your username
-// never breaks a link somebody saved to your profile.
-//
-// EVERYONE has one and anyone can look at anyone's, which is why
-// usernames are clickable all over Community Builds. A visitor
-// sees the person's picture, when they joined, follower/following
-// counts, build count and total likes, then the builds themselves.
-//
-// On YOUR OWN profile you also get:
-//   - change your username (subject to a 3-day cooldown, since
-//     your old name is held for you for 14 days)
-//   - upload a profile picture
-//   - flip each build between public and private
-//   - delete a build
-//   - a second tab for the builds you've LIKED
-//
-// Staff extras when viewing SOMEONE ELSE:
-//   - Ban / un-ban button (admin+). Convenience only; the full
-//     control lives in the admin panel at /admin.
-// ============================================================
+// a player's profile page, with extra controls on your own
 
 import { useEffect, useRef, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
@@ -41,7 +18,7 @@ import { TitleBadges } from '../components/TitleBadge';
 import { fileToAvatarDataUri } from '../avatarUpload';
 import { useAuth } from '../auth';
 
-// how a cooldown date is written out, e.g. "14 August 2026"
+// format a cooldown date
 function formatDate(iso: string): string {
     return new Date(iso).toLocaleDateString('en-AU',
         { day: 'numeric', month: 'long', year: 'numeric' });
@@ -63,8 +40,7 @@ export function ProfilePage() {
     const [tab, setTab] = useState<ProfileTab>('builds');
     const [busyBuild, setBusyBuild] = useState<number | null>(null);
 
-    // load the profile whenever the id in the address bar changes,
-    // or when you log in/out (which changes what you're allowed to see)
+    // reload when the id or login changes
     useEffect(() => {
         setLoading(true);
         setError('');
@@ -78,12 +54,12 @@ export function ProfilePage() {
             .finally(() => setLoading(false));
     }, [userId, user?.userId]);
 
-    // load YOUR liked builds when it's your own profile.
+    // your liked builds, own profile only
     useEffect(() => {
         if (profile?.isMe) getLikedBuilds().then(setLikedBuilds).catch(() => {});
     }, [profile?.isMe]);
 
-    // ---- owner actions ----
+    // owner actions
     async function handleTogglePrivacy(build: PlayerBuild) {
         setBusyBuild(build.build_id);
         try {
@@ -137,14 +113,12 @@ export function ProfilePage() {
 
     if (!profile) return null;
 
-    // Which list is being shown right now.
+    // the list being shown
     const shownBuilds = tab === 'likes' ? likedBuilds : builds;
 
     return (
         <div>
-            {/* Big prominent banner when the account is banned. Their
-                builds ALSO stay hidden from Community Builds while
-                the ban is in place; both come back on un-ban. */}
+            {/* banner shown while the account is banned */}
             {profile.isBanned && <BannedBanner profile={profile} />}
 
             <ProfileHeader
@@ -155,8 +129,7 @@ export function ProfilePage() {
 
             {error && <div className="error-box" role="alert" style={{ marginBottom: 16 }}>{error}</div>}
 
-            {/* ---- tabs (only useful on your own profile, where you
-                     also get a "liked builds" list) ---- */}
+            {/* tabs */}
             <div style={{ display: 'flex', gap: 8, margin: '32px 0 16px', flexWrap: 'wrap' }}>
                 <button
                     className={'pill' + (tab === 'builds' ? ' active' : '')}
@@ -209,11 +182,7 @@ export function ProfilePage() {
     );
 }
 
-// ============================================================
-// The banner at the top: picture, name, badges, stats, and the
-// controls to change your name and picture (own profile) or
-// follow / ban (other profiles).
-// ============================================================
+// the header: picture, name, badges, stats and controls
 function ProfileHeader({ profile, onSaved, saveProfile }: {
     profile: Profile;
     onSaved: (updated: Partial<Profile>) => void;
@@ -230,8 +199,7 @@ function ProfileHeader({ profile, onSaved, saveProfile }: {
 
     const picture = avatarUrl(profile);
 
-    // Renaming: the 3-day cooldown comes from the logged-in user's
-    // own record, so it only ever applies to your own profile.
+    // renaming has a cooldown, own profile only
     const renameBlockedUntil = profile.isMe ? (user?.usernameChangeableAt ?? null) : null;
 
     async function save(changes: Parameters<typeof saveProfile>[0], done: string) {
@@ -279,15 +247,13 @@ function ProfileHeader({ profile, onSaved, saveProfile }: {
         if (fileInput.current) fileInput.current.value = '';
     }
 
-    // ---- staff-only: ban/unban a person from their own profile ----
-    // The full form (duration, IP, reason) is on the admin panel;
-    // this is the "I'm looking at them anyway" convenience button.
+    // quick ban button for staff, full form is in the admin panel
     async function handleBan() {
         const banning = !profile.isBanned;
         const reason = banning
             ? window.prompt(`Ban ${profile.username}? Reason (optional):`, '') ?? undefined
             : undefined;
-        if (banning && reason === undefined) return;   // they cancelled
+        if (banning && reason === undefined) return;   // cancelled
         if (!banning && !window.confirm(`Un-ban ${profile.username}?`)) return;
 
         setBusy(true); setProblem('');
@@ -307,7 +273,7 @@ function ProfileHeader({ profile, onSaved, saveProfile }: {
 
     return (
         <section className="card profile-header">
-            {/* ---- picture ---- */}
+            {/* picture */}
             <div className="profile-picture-block">
                 <div className="profile-picture">
                     {picture
@@ -338,7 +304,7 @@ function ProfileHeader({ profile, onSaved, saveProfile }: {
                 )}
             </div>
 
-            {/* ---- name + badges + stats ---- */}
+            {/* name, badges and stats */}
             <div className="profile-details">
                 {editingName ? (
                     <div className="profile-name-edit">
@@ -446,16 +412,9 @@ function ProfileHeader({ profile, onSaved, saveProfile }: {
 }
 
 
-// ============================================================
-// The big red banner at the top of a banned account's profile.
-// Everything else on the profile stays there because the ban
-// might be lifted later - only the banner and the community
-// listing are affected by the current ban state.
-// ============================================================
+// the banner on a banned account's profile
 function BannedBanner({ profile }: { profile: Profile }) {
-    // Ban expiry as a friendly string. The banner shows the *date*
-    // when it lifts, not seconds-until - "24 August 2026" reads
-    // more clearly than "in 13 days".
+    // the date the ban lifts
     const until = profile.bannedUntil
         ? new Date(profile.bannedUntil).toLocaleDateString('en-AU',
             { day: 'numeric', month: 'long', year: 'numeric' })

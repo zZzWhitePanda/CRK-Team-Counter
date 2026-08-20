@@ -1,16 +1,4 @@
-// ============================================================
-// CounterToolPage.tsx - the main feature (UC01).
-//
-// The user builds the ENEMY team here and hits Find Counters.
-// Because you can't see an opponent's toppings/beascuit in-game,
-// the enemy side only lets you set what you CAN see: each cookie's
-// level and ascension, plus the team's 3 treasures. Full build
-// customisation (toppings, tarts, beascuits) lives in the
-// Community Builds submit form, where you describe your own team.
-//
-// Results come back in two lists: meta teams by win rate, and
-// community builds by likes (FR03/FR04).
-// ============================================================
+// the counter tool: build an enemy team and find counters (UC01)
 
 import { useEffect, useState } from 'react';
 import { Target, Heart, Swords, Gem, Settings2 } from 'lucide-react';
@@ -26,7 +14,7 @@ import { useDragReorder, moveItem } from '../useDragReorder';
 export function CounterToolPage() {
     const [roster, setRoster] = useState<Cookie[]>([]);
 
-    // the enemy team: 5 cookie slots + what we can see of each cookie
+    // the enemy team, 5 slots
     const [enemyTeam, setEnemyTeam] = useState<string[]>(['', '', '', '', '']);
     const [enemyInfo, setEnemyInfo] = useState<EnemyInfo[]>(
         () => Array.from({ length: 5 }, emptyEnemyInfo));
@@ -37,14 +25,14 @@ export function CounterToolPage() {
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
 
-    // load the roster once to fill the picker
+    // load the roster for the picker
     useEffect(() => {
         getCookies().then(setRoster).catch(err => setError(err.message));
     }, []);
 
     function setSlot(index: number, name: string) {
         setEnemyTeam(prev => prev.map((n, i) => i === index ? name : n));
-        if (name === '') {  // clearing a slot resets its info
+        if (name === '') {  // clearing a slot resets it
             setEnemyInfo(prev => prev.map((info, i) => i === index ? emptyEnemyInfo() : info));
         }
     }
@@ -52,16 +40,14 @@ export function CounterToolPage() {
         setEnemyInfo(prev => prev.map((v, i) => i === index ? info : v));
     }
 
-    // Dragging a slot moves the cookie AND its level/stars together,
-    // so a cookie never ends up with someone else's info.
+    // drag moves the cookie and its info together
     const enemyDrag = useDragReorder((from, to) => {
         setEnemyTeam(prev => moveItem(prev, from, to));
         setEnemyInfo(prev => moveItem(prev, from, to));
     });
 
     async function runSearch() {
-        // FR09: check on the browser side first so an empty search
-        // never wastes a trip to the server (it checks again anyway)
+        // FR09: check for an empty team before searching
         const picked = enemyTeam.filter(name => name !== '');
         if (picked.length === 0) {
             setError('Please pick at least one enemy cookie.');
@@ -70,9 +56,7 @@ export function CounterToolPage() {
         setLoading(true);
         setError('');
         try {
-            // the lookup matches on the enemy team's cookies; the
-            // level/ascension/treasures are extra context the user
-            // records but don't change which teams counter this comp.
+            // only the cookie names affect the search
             setResults(await lookupCounters(picked, {}));
         } catch (err) {
             setError(err instanceof Error ? err.message : 'Search failed.');
@@ -95,7 +79,7 @@ export function CounterToolPage() {
                 Drop in the opponent's roster, get counter teams that win the matchup.
             </p>
 
-            {/* ---- enemy team card ---- */}
+            {/* enemy team */}
             <div className="card" style={{ marginBottom: 24 }}>
                 <h2 className="section-title" style={{ fontSize: 18 }}>
                     <Target size={20} color="var(--color-enemy)" aria-hidden="true" />
@@ -108,8 +92,7 @@ export function CounterToolPage() {
                 <div className="picker-row">
                     {enemyTeam.map((name, i) => {
                         const cookie = roster.find(c => c.name === name);
-                        // className is pulled OUT of the spread: spreading
-                        // it too would overwrite the picker-cell class.
+                        // className is kept out so it isn't overwritten
                         const { className: dragClass, ...dragHandlers } =
                             cookie ? enemyDrag.slotProps(i) : { className: '' };
                         return (
@@ -123,7 +106,7 @@ export function CounterToolPage() {
                                     onPick={n => setSlot(i, n)}
                                     onClear={() => setSlot(i, '')}
                                 />
-                                {/* once picked, a small button for level + stars */}
+                                {/* level and stars button */}
                                 {cookie && (
                                     <button className="pill info-button" onClick={() => setEditingEnemy(i)}>
                                         <Settings2 size={14} aria-hidden="true" />
@@ -137,7 +120,7 @@ export function CounterToolPage() {
                     })}
                 </div>
 
-                {/* enemy team treasures (3 slots) */}
+                {/* enemy treasures */}
                 <h3 className="section-title" style={{ fontSize: 15, marginTop: 24 }}>
                     <Gem size={16} color="var(--color-enemy)" aria-hidden="true" /> Treasures
                 </h3>
@@ -152,7 +135,7 @@ export function CounterToolPage() {
                 </button>
             </div>
 
-            {/* the enemy info popup (level + ascension only) */}
+            {/* the enemy info popup */}
             {editingEnemy !== null && roster.find(c => c.name === enemyTeam[editingEnemy]) && (
                 <EnemyCookieEditor
                     cookie={roster.find(c => c.name === enemyTeam[editingEnemy])!}
@@ -162,21 +145,21 @@ export function CounterToolPage() {
                 />
             )}
 
-            {/* ---- loading skeletons ---- */}
+            {/* loading */}
             {loading && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                     {Array.from({ length: 2 }).map((_, i) => <div key={i} className="skeleton" style={{ height: 130 }} />)}
                 </div>
             )}
 
-            {/* ---- FR10: no matches message ---- */}
+            {/* FR10: no matches */}
             {!loading && nothingFound && (
                 <div className="card">
                     <p>No saved counters for that team yet — be the first to add one on Community Builds!</p>
                 </div>
             )}
 
-            {/* ---- meta teams, by win rate (FR03) ---- */}
+            {/* meta teams, by win rate (FR03) */}
             {!loading && results && results.metaTeams.length > 0 && (
                 <section style={{ marginBottom: 24 }}>
                     <h2 style={{ marginBottom: 12 }}>Meta Counters</h2>
@@ -195,7 +178,7 @@ export function CounterToolPage() {
                 </section>
             )}
 
-            {/* ---- community builds, by likes (FR04) ---- */}
+            {/* community builds, by likes (FR04) */}
             {!loading && results && results.playerTeams.length > 0 && (
                 <section>
                     <h2 style={{ marginBottom: 4 }}>Community Counters</h2>
@@ -228,11 +211,7 @@ export function CounterToolPage() {
     );
 }
 
-// ---- how well a result matches what was searched ----------------
-// The lookup now returns SIMILAR teams, not just exact ones, so
-// every result says how much of the searched team it actually
-// covers. Without this a near-miss would look like a perfect
-// answer, which would be misleading.
+// shows how much of the searched team a result covers
 function MatchBadge({ matched, searched, exact, anyTeam }: {
     matched?: number; searched?: number; exact?: boolean; anyTeam?: boolean;
 }) {

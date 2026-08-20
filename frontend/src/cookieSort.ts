@@ -1,16 +1,8 @@
-// ============================================================
-// cookieSort.ts - the shared sorting + grouping rules for the
-// cookie roster. Used by BOTH the Cookies page and the cookie
-// picker so they always behave the same way.
-//
-// The layout follows paimon.moe: when you sort by a category
-// (rarity / type / position) the cookies are split into sections
-// with a heading for each group, instead of one long flat list.
-// ============================================================
+// sorting and grouping for the cookie roster
 
 import { Cookie } from './api';
 
-// low -> high, so the index of each rarity is its rank
+// low to high, the index is the rank
 export const RARITIES = [
     'Common', 'Rare', 'Special', 'Epic', 'Super Epic',
     'Dragon', 'Legendary', 'Ancient', 'Beast', 'Witch',
@@ -24,8 +16,7 @@ export const TYPES = [
 ];
 export const POSITIONS = ['Front', 'Middle', 'Rear'];
 
-// the options in the "Sort by" drop-down. Rarity is the default
-// everywhere, because that's how players think about the roster.
+// sort by options
 export type SortField = 'rarity' | 'release' | 'name' | 'type' | 'position';
 
 export const SORT_OPTIONS: { value: SortField; label: string }[] = [
@@ -36,24 +27,19 @@ export const SORT_OPTIONS: { value: SortField; label: string }[] = [
     { value: 'position', label: 'Position' },
 ];
 
-// each rarity gets its own accent colour (the CSS variables live in
-// theme.css) so the roster is colour-coded at a glance.
+// colour for a rarity
 export function rarityColor(rarity: string): string {
     const key = rarity.toLowerCase().replace(/ /g, '-');
     return `var(--rarity-${key}, var(--color-primary))`;
 }
 
-// one section of the grid: a heading plus the cookies under it
+// a section of the grid
 export interface CookieGroup {
-    key: string;            // the heading text ('Beast', 'Magic', …)
+    key: string;            // heading text
     cookies: Cookie[];
 }
 
-/**
- * Sort the cookies and split them into groups.
- * Sorting by name gives a single unnamed group (a plain A-Z list);
- * every other field gives one group per rarity / type / position.
- */
+// sort the cookies and split them into groups
 export function groupCookies(
     cookies: Cookie[],
     field: SortField,
@@ -61,24 +47,20 @@ export function groupCookies(
 ): CookieGroup[] {
     const byName = (a: Cookie, b: Cookie) => a.name.localeCompare(b.name);
 
-    // --- name: no sections, just A-Z (or Z-A) ---
+    // name: no sections, just A-Z
     if (field === 'name') {
         const list = [...cookies].sort((a, b) => ascending ? byName(a, b) : byName(b, a));
         return [{ key: '', cookies: list }];
     }
 
-    // --- release order: a section per YEAR, oldest first ---
-    // Inside a year the cookies stay in the order they came out,
-    // which is the whole point of this sort. Anything with no date
-    // (shouldn't happen - all 190 have one) is parked at the end.
+    // release order: a section per year
     if (field === 'release') {
         const dated = cookies.filter(c => c.release_date);
         const undated = cookies.filter(c => !c.release_date);
 
         dated.sort((a, b) => {
             const diff = a.release_date!.localeCompare(b.release_date!);
-            // same day (a batch launch) - fall back to A-Z so the
-            // order doesn't jump around between page loads
+            // same day, fall back to A-Z
             return (ascending ? diff : -diff) || byName(a, b);
         });
 
@@ -93,8 +75,7 @@ export function groupCookies(
         return years;
     }
 
-    // --- everything else: one section per group ---
-    // the order the sections appear in
+    // everything else: one section per group
     const order = field === 'rarity' ? RARITIES
         : field === 'type' ? TYPES
         : POSITIONS;
@@ -104,13 +85,13 @@ export function groupCookies(
     for (const key of sections) {
         const inGroup = cookies
             .filter(c => (field === 'rarity' ? c.rarity : field === 'type' ? c.type : c.position) === key)
-            .sort(byName);                       // inside a section, always A-Z
+            .sort(byName);                       // A-Z inside a section
         if (inGroup.length > 0) groups.push({ key, cookies: inGroup });
     }
     return groups;
 }
 
-// the little label under the direction button, e.g. "Common → Beast"
+// label for the direction button
 export function directionLabel(field: SortField, ascending: boolean): string {
     if (field === 'name') return ascending ? 'A → Z' : 'Z → A';
     if (field === 'rarity') return ascending ? 'Common → Witch' : 'Witch → Common';
@@ -118,12 +99,11 @@ export function directionLabel(field: SortField, ascending: boolean): string {
     return ascending ? 'First → Last' : 'Last → First';
 }
 
-// "15 January 2025" - how a release date is shown on a cookie card
+// format a release date
 export function formatRelease(date: string | null): string {
     if (!date) return 'Release date unknown';
     const [y, m, d] = date.split('-').map(Number);
-    // built from the parts rather than new Date(date) so the browser's
-    // timezone can't shift it to the day before
+    // built from parts so the timezone can't shift the day
     return new Date(y, m - 1, d).toLocaleDateString('en-AU',
         { day: 'numeric', month: 'long', year: 'numeric' });
 }

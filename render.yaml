@@ -1,9 +1,4 @@
-# ============================================================
-# render.yaml - tells Render how to run the backend.
-# When the GitHub repo is connected as a "Blueprint" on Render,
-# it reads this file and sets everything up: no manual form
-# filling except pasting the two environment variables.
-# ============================================================
+# tells Render how to run the backend
 services:
   - type: web
     name: crk-team-builder-api
@@ -15,8 +10,8 @@ services:
     healthCheckPath: /api/health
     envVars:
       - key: DATABASE_URL
-        sync: false        # secret - pasted in the Render dashboard, never in git
+        sync: false        # pasted in the dashboard, never in git
       - key: DATABASE_SSL
-        value: "true"      # Neon requires encrypted connections
+        value: "true"      # Neon needs SSL
       - key: JWT_SECRET
-        generateValue: true   # Render makes a strong random secret for login tokens
+        generateValue: true   # Render generates this

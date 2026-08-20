@@ -1,14 +1,4 @@
-// ============================================================
-// BuildCard.tsx - one community build in a list.
-//
-// The same card is used on the Community Builds page and on
-// people's profiles, so a build always looks and behaves the same
-// way. Clicking it opens the full details (BuildDetail).
-//
-// The owner-only controls (public/private and delete) are passed
-// in as optional callbacks: no callbacks means no buttons, which
-// is how other people's profiles hide them.
-// ============================================================
+// one community build in a list
 
 import { Heart, Eye, EyeOff, Trash2, BarChart2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
@@ -20,12 +10,12 @@ import { TitleBadges } from './TitleBadge';
 interface Props {
     build: PlayerBuild;
     roster: Cookie[];
-    rank?: number;                                  // the #1, #2… badge
+    rank?: number;                                  // rank badge
     onOpen: () => void;
     onLike?: () => void;
     onTogglePrivacy?: () => void;                   // owner only
     onDelete?: () => void;                          // owner only
-    busy?: boolean;                                 // an owner action is saving
+    busy?: boolean;                                 // saving
 }
 
 export function BuildCard({
@@ -39,8 +29,7 @@ export function BuildCard({
             onClick={onOpen}
             role="button"
             tabIndex={0}
-            // keyboard users get the same click, so the details aren't
-            // mouse-only (accessibility)
+            // keyboard users can open it too
             onKeyDown={e => {
                 if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onOpen(); }
             }}
@@ -62,8 +51,7 @@ export function BuildCard({
                 )}
 
                 {onLike && (
-                    // stopPropagation everywhere below: without it, clicking
-                    // a button would ALSO open the details popup
+                    // stopPropagation stops the details popup opening
                     <button
                         className={'like-button' + (build.likedByMe ? ' liked' : '')}
                         onClick={e => { e.stopPropagation(); onLike(); }}
@@ -75,7 +63,7 @@ export function BuildCard({
                 )}
             </div>
 
-            {/* the author, clickable through to their profile */}
+            {/* the author, links to their profile */}
             <div className="build-card-byline">
                 <Avatar who={build} username={build.username} size={24} />
                 <Link
@@ -95,7 +83,7 @@ export function BuildCard({
 
             {build.note && <p className="build-card-note">{build.note}</p>}
 
-            {/* ---- owner controls ---- */}
+            {/* owner controls */}
             {(onTogglePrivacy || onDelete) && (
                 <div className="build-card-actions" onClick={e => e.stopPropagation()}>
                     {onTogglePrivacy && (

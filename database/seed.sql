@@ -1,35 +1,14 @@
--- ============================================================
 -- CRK Team Builder - Seed Data
 -- Flynn Zipsin - VCE Software Development SAT
---
--- Fills the tables with starting data so the website has
--- something to show. Run order:
---     1. schema.sql        (creates the tables)
---     2. cookies_seed.sql  (the full roster, generated file)
---     3. seed.sql          (this file: the meta team database)
---
--- The cookie roster is NOT in this file - it lives in
--- cookies_seed.sql which is generated from the wiki data by
--- generate_cookie_seed.js (see README).
---
--- NOTE: this file no longer seeds sample users or community
--- builds. Real accounts are created through sign-up, and the
--- community builds are added by logged-in users, so those
--- tables start EMPTY on purpose. Only the meta team database
--- (my curated counters, FR03) is seeded here.
--- ============================================================
+-- Fills in the meta teams. Run after schema.sql and cookies_seed.sql.
+-- Users and community builds start empty on purpose.
 
--- Wipe existing rows first so seeding twice doesn't double up.
--- (cookies is left alone here - cookies_seed.sql manages it.)
+-- clear first so seeding twice doesn't double up
 TRUNCATE build_likes, user_builds, meta_teams, users
     RESTART IDENTITY CASCADE;
 
 
--- ------------------------------------------------------------
--- Meta teams (my admin-maintained counter database, FR03)
--- counters = the ENEMY cookies this team is good against.
--- The lookup matches the user's enemy team against this array.
--- ------------------------------------------------------------
+-- meta teams (FR03). counters = the enemy cookies this team beats
 INSERT INTO meta_teams (team_name, team_cookies, gear_setup, counters, win_rate) VALUES
 (
     'Shadow Milk Burst',

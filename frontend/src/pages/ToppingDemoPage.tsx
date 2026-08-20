@@ -1,8 +1,4 @@
-// Sandbox for tuning topping-board alignment. Only reachable at
-// /topping-demo — not linked from anywhere. The per-slot arrow
-// buttons write inline --slot-N-dx / --slot-N-dy on the wrapper,
-// which ToppingCircle picks up via var(). The "Generated CSS"
-// box shows what to paste into .topping-board in theme.css.
+// unlisted test page for lining up the topping board
 import { useState } from 'react';
 import { ChevronUp, ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react';
 import { ToppingCircle } from '../components/ToppingCircle';
@@ -11,8 +7,7 @@ import type { ToppingSlot } from '../gear';
 
 type Nudge = { dx: number; dy: number };
 
-// Starting values are the current production offsets so tuning
-// picks up where the deploy left off. dx/dy are in % of board.
+// starting offsets, in % of the board
 const START: Nudge[] = [
     { dx: -0.31, dy: -1.56 },
     { dx:  0.94, dy: -0.94 },
@@ -21,7 +16,7 @@ const START: Nudge[] = [
     { dx: -1.56, dy: -0.63 },
 ];
 
-// Each arrow click nudges by this %. Shift = 5x.
+// nudge size per click, shift for 5x
 const STEP = 0.2;
 
 export function ToppingDemoPage() {
@@ -45,7 +40,7 @@ export function ToppingDemoPage() {
     }
     function resetAll() { setNudges(START); }
 
-    // Cycle each slot through every topping to check alignment for all
+    // cycle through every topping to check alignment
     const [ticker, setTicker] = useState(0);
     function cycleAll() {
         setTicker(t => t + 1);

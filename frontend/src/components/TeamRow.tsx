@@ -1,18 +1,12 @@
-// ============================================================
-// TeamRow.tsx - one row of cookie portraits with a label,
-// like the "VS. [][][][][]" and "USE [][][][][]" rows on
-// mockup 1. The color carries meaning (design system rule):
-//   enemy  -> red label + red slot borders
-//   ally   -> cyan label + cyan slot borders
-// ============================================================
+// a labelled row of cookie portraits, red for enemy, cyan for ally
 
 import { Cookie, cookieImageUrl } from '../api';
 
 interface TeamRowProps {
-    label: string;               // "VS." or "USE"
+    label: string;               // row label
     kind: 'enemy' | 'ally';
     cookieNames: string[];
-    allCookies: Cookie[];        // full roster, used to find each portrait
+    allCookies: Cookie[];        // roster, to find portraits
 }
 
 export function TeamRow({ label, kind, cookieNames, allCookies }: TeamRowProps) {
@@ -60,7 +54,7 @@ export function TeamRow({ label, kind, cookieNames, allCookies }: TeamRowProps) 
                                 style={{ objectFit: 'contain' }}
                             />
                         ) : (
-                            // cookie not in the roster (shouldn't happen) - show initials
+                            // not in the roster, show initials
                             <span className="muted" style={{ fontSize: 12 }}>
                                 {name.slice(0, 2)}
                             </span>

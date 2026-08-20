@@ -1,50 +1,30 @@
-// ============================================================
-// theme.ts - the whole theming system.
-//
-// This replaces the old accent-colour-only setting. A theme now
-// controls the real colours of the site, and can carry a
-// background image.
-//
-// HOW IT WORKS
-// theme.css never uses a raw colour - every rule reads a CSS
-// variable like var(--color-card). Applying a theme just means
-// setting those variables on <html>, and the entire site changes
-// at once. That's why the stylesheet was written that way.
-//
-// A theme only stores FOUR colours (background, surface, text,
-// accent). Everything else the stylesheet needs - hover states,
-// muted text, borders, input backgrounds - is worked out from
-// those four by the colour maths below. That's what keeps the
-// editor simple: you pick four colours, not twenty.
-// ============================================================
+// theme system - a theme sets the CSS variables theme.css reads
 
 export interface ThemeColors {
-    background: string;   // the page behind everything
-    surface: string;      // cards, the sidebar, panels
-    text: string;         // main text colour
-    accent: string;       // buttons, links, highlights
+    background: string;   // page background
+    surface: string;      // cards and panels
+    text: string;         // text colour
+    accent: string;       // buttons and links
 }
 
 export interface Theme {
     name: string;
     colors: ThemeColors;
-    // an optional background picture, held as a data URI so it can
-    // be saved with the theme instead of living in a separate file
+    // optional background picture, as a data URI
     backgroundImage: string | null;
-    // how strongly the picture shows through, 0-1
+    // picture opacity, 0-1
     backgroundOpacity: number;
-    // false on the built-in presets, true on ones a player made
+    // true if user made
     custom?: boolean;
 }
 
-// ---- colour maths -------------------------------------------
-// Small helpers so a theme can be built from only four colours.
+// colour helpers
 
 interface Rgb { r: number; g: number; b: number; }
 
 export function hexToRgb(hex: string): Rgb {
     let h = hex.replace('#', '').trim();
-    // allow the short form (#abc -> #aabbcc)
+// short form #abc -> #aabbcc
     if (h.length === 3) h = h.split('').map(c => c + c).join('');
     const n = parseInt(h, 16);
     if (Number.isNaN(n) || h.length !== 6) return { r: 0, g: 0, b: 0 };
@@ -57,7 +37,7 @@ function toHex({ r, g, b }: Rgb): string {
     return '#' + part(r) + part(g) + part(b);
 }
 
-/** Blend two colours. amount 0 = all of `a`, 1 = all of `b`. */
+// blend two colours
 function mix(a: string, b: string, amount: number): string {
     const x = hexToRgb(a), y = hexToRgb(b);
     return toHex({
@@ -67,36 +47,29 @@ function mix(a: string, b: string, amount: number): string {
     });
 }
 
-/**
- * How bright a colour is, 0 (black) to 1 (white). The numbers are
- * the standard weights for how sensitive human eyes are to red,
- * green and blue - green looks much brighter than blue at the same
- * value, so a plain average would be wrong.
- */
+// brightness of a colour, 0 to 1
 export function brightness(hex: string): number {
     const { r, g, b } = hexToRgb(hex);
     return (r * 0.299 + g * 0.587 + b * 0.114) / 255;
 }
 
-/** Is this a light theme? Decided by the BACKGROUND, not the text. */
+// is this a light theme?
 export function isLight(theme: Theme): boolean {
     return brightness(theme.colors.background) > 0.5;
 }
 
-/** Black or white, whichever is readable on the given colour. */
+// black or white, whichever is readable
 export function readableOn(hex: string): string {
     return brightness(hex) > 0.55 ? '#111111' : '#ffffff';
 }
 
-/** A colour with an alpha, e.g. rgba(139,124,246,0.45) */
+// colour with transparency
 function withAlpha(hex: string, alpha: number): string {
     const { r, g, b } = hexToRgb(hex);
     return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 }
 
-// ---- the built-in themes ------------------------------------
-// "Dark" (the original CRK navy from the mockups) is the default
-// the site ships with. The others are alternatives.
+// built-in themes
 
 export const PRESET_THEMES: Theme[] = [
     {
@@ -169,22 +142,13 @@ export const PRESET_THEMES: Theme[] = [
 
 export const DEFAULT_THEME: Theme = PRESET_THEMES[0];
 
-// ---- applying a theme ---------------------------------------
-
-/**
- * Work out every CSS variable the stylesheet needs from a theme's
- * four colours, and set them on <html>. Called on startup and
- * again on every change in the editor, which is what makes the
- * preview update live.
- */
+// work out every CSS variable from the theme's four colours
 export function applyTheme(theme: Theme) {
     const root = document.documentElement;
     const { background, surface, text, accent } = theme.colors;
     const light = brightness(background) > 0.5;
 
-    // On a dark theme, "deeper" means closer to black and raised
-    // surfaces are lighter. On a light theme it's the other way
-    // round, so every step below flips direction with `light`.
+    // light and dark themes shade in opposite directions
     const deepen = (hex: string, amount: number) =>
         mix(hex, light ? '#000000' : '#000000', amount);
     const raise = (hex: string, amount: number) =>
@@ -192,45 +156,39 @@ export function applyTheme(theme: Theme) {
 
     const set = (name: string, value: string) => root.style.setProperty(name, value);
 
-    // ---- surfaces ----
+    // surfaces
     set('--color-bg-deep', background);
     set('--color-bg', light ? deepen(background, 0.03) : raise(background, 0.04));
     set('--color-sidebar', light ? deepen(surface, 0.05) : deepen(surface, 0.25));
     set('--color-card', surface);
     set('--color-card-hover', raise(surface, light ? 0.05 : 0.08));
-    // inputs sit BELOW the card, so they go the other way to cards
+    // inputs sit below cards
     set('--color-input', light ? deepen(surface, 0.08) : deepen(surface, 0.35));
 
-    // ---- text ----
+    // text
     set('--color-text', text);
-    // body text and muted text are the main text faded towards the
-    // background, so they stay readable whatever the theme
+    // faded towards the background
     set('--color-text-body', mix(text, background, 0.22));
     set('--color-text-muted', mix(text, background, 0.45));
 
-    // ---- accent ----
+    // accent
     const accentHover = light
-        ? mix(accent, '#000000', 0.18)     // darken on light themes
-        : mix(accent, '#ffffff', 0.18);    // lighten on dark ones
+        ? mix(accent, '#000000', 0.18)     // darken on light
+        : mix(accent, '#ffffff', 0.18);    // lighten on dark
     set('--color-primary', accent);
     set('--color-primary-hover', accentHover);
     set('--gradient-primary', `linear-gradient(135deg, ${accent} 0%, ${mix(accent, background, 0.25)} 100%)`);
     set('--glow-primary', `0 0 24px ${withAlpha(accent, light ? 0.35 : 0.45)}`);
-    // text drawn ON TOP of the accent (button labels) has to be
-    // readable - a white accent needs black text, not white
+    // text on top of the accent
     set('--color-on-primary', readableOn(accent));
 
-    // ---- lines and shadows ----
-    // A dark theme uses faint WHITE lines; a light theme needs faint
-    // BLACK ones or they'd be invisible.
+    // lines and shadows
     set('--color-border', light ? 'rgba(0, 0, 0, 0.12)' : 'rgba(255, 255, 255, 0.08)');
     set('--color-border-strong', light ? 'rgba(0, 0, 0, 0.22)' : 'rgba(255, 255, 255, 0.14)');
     set('--shadow-card', light ? '0 4px 16px rgba(0,0,0,0.10)' : '0 4px 16px rgba(0,0,0,0.35)');
     set('--shadow-card-hover', light ? '0 10px 28px rgba(0,0,0,0.16)' : '0 10px 28px rgba(0,0,0,0.45)');
 
-    // ---- the page background ----
-    // The soft glows are built from the accent so they belong to
-    // whatever theme is on, instead of always being purple.
+    // page background glows, built from the accent
     const glowA = withAlpha(accent, light ? 0.20 : 0.28);
     const glowB = withAlpha(accent, light ? 0.10 : 0.18);
     set('--page-background',
@@ -238,10 +196,10 @@ export function applyTheme(theme: Theme) {
         + `radial-gradient(820px 520px at 8% 4%, ${glowB}, transparent 55%),`
         + `${background}`);
 
-    // the film grain is far too obvious on a pale background
+    // grain is too strong on pale backgrounds
     set('--grain-opacity', light ? '0.02' : '0.04');
 
-    // ---- background picture ----
+    // background picture
     if (theme.backgroundImage) {
         set('--background-image', `url("${theme.backgroundImage}")`);
         set('--background-image-opacity', String(theme.backgroundOpacity));
@@ -250,15 +208,11 @@ export function applyTheme(theme: Theme) {
         set('--background-image-opacity', '0');
     }
 
-    // lets CSS ask which kind of theme is on, e.g. for the logo
+    // lets CSS check the theme type
     root.setAttribute('data-theme', light ? 'light' : 'dark');
 }
 
-// ---- saving the theme locally -------------------------------
-// The theme is applied BEFORE the app has asked the server who is
-// logged in, so a copy is kept in the browser too. Without this
-// the site would flash the default theme on every page load while
-// it waits for the account to load.
+// saving the theme in the browser
 
 const STORAGE_KEY = 'crk_theme';
 
@@ -267,7 +221,7 @@ export function loadLocalTheme(): Theme {
         const saved = localStorage.getItem(STORAGE_KEY);
         if (saved) return normaliseTheme(JSON.parse(saved));
     } catch {
-        // corrupt or unreadable - fall through to the default
+        // broken saved theme, use the default
     }
     return DEFAULT_THEME;
 }
@@ -276,17 +230,11 @@ export function saveLocalTheme(theme: Theme) {
     try {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(theme));
     } catch {
-        // localStorage can be full (a big background image) or turned
-        // off entirely. The theme still works for this visit, so
-        // there's nothing useful to tell the user here.
+        // storage full or off, ignore
     }
 }
 
-/**
- * Make sure something loaded from storage or the server really is
- * a usable theme. Anything missing falls back to the default, so a
- * half-saved or hand-edited theme can't break the whole site.
- */
+// check a loaded theme is valid, filling gaps with the default
 export function normaliseTheme(value: unknown): Theme {
     const fallback = DEFAULT_THEME;
     if (typeof value !== 'object' || value === null) return fallback;

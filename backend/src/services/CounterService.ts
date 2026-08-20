@@ -1,22 +1,11 @@
-// ============================================================
-// CounterService.ts - the main algorithm of the whole website.
-//
-// This is the counter lookup from my SRS (section 6.7) turned
-// into a TypeScript class. The class wraps everything to do
-// with finding counter teams in one place, so the route file
-// just calls counterService.lookupCounters(...) and doesn't
-// need to know how the search works inside.
-// ============================================================
+// the counter lookup algorithm (SRS 6.7)
 
 import { query } from '../db';
 
-// ---- Types: the shapes of the data moving through the lookup ----
-
-// gear is a lookup of cookie name -> gear type,
-// e.g. { "Shadow Milk Cookie": "Swift Chocolate" }
+// cookie name -> gear type
 export type GearSetup = Record<string, string>;
 
-// a meta team row as it comes back from the database
+// a meta team from the database
 export interface MetaTeam {
     meta_team_id: number;
     team_name: string;
@@ -24,12 +13,12 @@ export interface MetaTeam {
     gear_setup: GearSetup | null;
     counters: string[];
     win_rate: number;
-    matched?: number;    // how many of the searched cookies it covers
+    matched?: number;    // cookies it covers
     searched?: number;
     exact?: boolean;
 }
 
-// a community build row (joined with the username of who made it)
+// a community build
 export interface PlayerBuild {
     build_id: number;
     username: string;
@@ -38,53 +27,37 @@ export interface PlayerBuild {
     gear_setup: GearSetup | null;
     note: string | null;
     likes: number;
-    score?: number;         // only set when the user searched with gear
-    matched?: number;       // how many of the enemy cookies this build covers
-    searched?: number;      // how many the user searched for
-    exact?: boolean;        // true when it covers the whole enemy team
-    anyTeam?: boolean;      // true when it's a general-purpose build
+    score?: number;         // only set when searching with gear
+    matched?: number;       // enemy cookies covered
+    searched?: number;      // cookies searched for
+    exact?: boolean;        // covers the whole enemy team
+    anyTeam?: boolean;      // a general-purpose build
 }
 
-// what the lookup hands back to the route
+// what the lookup returns
 export interface LookupResult {
     metaTeams: MetaTeam[];
     playerTeams: PlayerBuild[];
 }
 
-// how many points one matching gear piece is worth when boosting
-// player teams (from the SRS pseudocode: likes + matches * 5)
+// points per matching gear piece
 const GEAR_MATCH_BONUS = 5;
 
 export class CounterService {
 
-    // ----------------------------------------------------------
-    // The main algorithm (SRS 6.7 pseudocode, step by step)
-    // ----------------------------------------------------------
+    // the main algorithm
     async lookupCounters(enemyTeam: string[], enemyGear: GearSetup = {}): Promise<LookupResult> {
 
-        // STEP 1: empty enemy team is the caller's job to reject
-        // before calling this (the route checks it, see lookup.ts).
-        // It is checked again here as a safety net.
+        // step 1: reject an empty team
         if (!enemyTeam || enemyTeam.length === 0) {
             throw new Error('enemyTeam must contain at least one cookie');
         }
 
-        // STEP 2: meta teams that counter ANY of the enemy cookies.
-        //
-        // The original version used `counters @> $1`, which only
-        // matched a team that beats EVERY cookie searched for. That
-        // is far too strict in practice: swap one cookie out of a
-        // five-cookie team and you got nothing back at all. The
-        // overlap version below finds teams that share at least one
-        // cookie and then RANKS them by how much they overlap, so a
-        // near-miss still shows up (just lower down).
-        //
-        // && is Postgres's "arrays overlap" operator - true when the
-        // two arrays share at least one element. It uses the same
-        // GIN index as @>, so this stays fast.
+        // step 2: meta teams countering any enemy cookie, best overlap first.
+        // && means the arrays share at least one item
         const metaResult = await query(
             `SELECT meta_team_id, team_name, team_cookies, gear_setup, counters, win_rate,
-                    -- how many of the searched cookies this team counters
+                    -- how many searched cookies it counters
                     cardinality(ARRAY(SELECT UNNEST(counters) INTERSECT SELECT UNNEST($1::text[]))) AS matched
              FROM meta_teams
              WHERE counters && $1
@@ -93,10 +66,7 @@ export class CounterService {
             [enemyTeam]
         );
 
-        // STEP 3: community builds. Two kinds are useful here:
-        //   * builds saved against an overlapping enemy team
-        //   * "works against anything" builds, saved with NO enemy
-        //     team at all - those are always relevant
+        // step 3: community builds, matching or general-purpose ones
         const playerResult = await query(
             `SELECT b.build_id, b.user_id, u.username, u.avatar, u.avatar_data, u.titles,
                     b.opponent_team, b.counter_team,
@@ -120,15 +90,13 @@ export class CounterService {
             ...row,
             matched: Number(row.matched ?? 0),
             searched: enemyTeam.length,
-            // "exact" = this build was made against precisely the
-            // team being searched for, so the UI can badge it
+            // exact = made against this exact team
             exact: Number(row.matched ?? 0) === enemyTeam.length
                 && row.opponent_team?.length === enemyTeam.length,
             anyTeam: row.any_team === true,
         }));
 
-        // STEP 4: if the user told us the enemy's gear, boost the
-        // player teams whose saved gear matches it, then re-sort.
+        // step 4: boost builds whose gear matches
         if (Object.keys(enemyGear).length > 0) {
             playerTeams = this.applyGearBonus(playerTeams, enemyGear);
         }
@@ -140,16 +108,11 @@ export class CounterService {
             exact: Number(row.matched ?? 0) === enemyTeam.length,
         }));
 
-        // STEP 5: hand both lists back
+        // step 5: return both lists
         return { metaTeams, playerTeams };
     }
 
-    // ----------------------------------------------------------
-    // Gear bonus (private = only this class can use it).
-    // For each player team, count how many of the enemy's gear
-    // picks its saved gear_setup also has, then score the team
-    // as likes + matches * 5 and sort by that score.
-    // ----------------------------------------------------------
+    // score = likes + matching gear pieces * 5
     private applyGearBonus(teams: PlayerBuild[], enemyGear: GearSetup): PlayerBuild[] {
 
         for (const team of teams) {
@@ -164,15 +127,12 @@ export class CounterService {
             team.score = team.likes + matches * GEAR_MATCH_BONUS;
         }
 
-        // Sort by how many enemy cookies the build actually covers
-        // FIRST, and only use the gear score to break ties. Without
-        // that, a wildly popular build for a different team could
-        // outrank the one that actually matches what was searched.
+        // sort by cookies covered, then use the score as a tiebreak
         return [...teams].sort((a, b) =>
             (b.matched ?? 0) - (a.matched ?? 0)
             || (b.score ?? 0) - (a.score ?? 0));
     }
 }
 
-// one shared instance the routes can import
+// the shared instance routes use
 export const counterService = new CounterService();

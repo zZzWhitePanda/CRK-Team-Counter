@@ -1,14 +1,4 @@
-// ============================================================
-// routes/ipBans.ts - blocking whole IP addresses.
-//
-// A per-account ban stops that one person coming back. IP bans
-// are the stronger version: anyone signing in from a banned IP
-// is refused, whichever account they use. Owner-only.
-//
-// GET    /api/ip-bans            list active bans
-// POST   /api/ip-bans            { ip, reason?, minutes? }
-// DELETE /api/ip-bans/:ip        un-ban an IP
-// ============================================================
+// /api/ip-bans - block whole IP addresses. owner only
 
 import { Router, Request, Response } from 'express';
 import { query } from '../db';
@@ -16,8 +6,7 @@ import { requireOwner } from '../auth';
 
 export const ipBansRouter = Router();
 
-// simple IPv4 / IPv6 shape check - not a full parse (Postgres
-// wouldn't care), but enough that a typo gets caught here
+// rough IP check, enough to catch a typo
 const IP_RE = /^[0-9a-fA-F.:]+$/;
 
 ipBansRouter.get('/', requireOwner, async (_req: Request, res: Response) => {
@@ -46,8 +35,7 @@ ipBansRouter.post('/', requireOwner, async (req: Request, res: Response) => {
         const minutes = Number.isFinite(rawMinutes) && rawMinutes > 0 ? rawMinutes : null;
         const bannedUntil = minutes ? new Date(Date.now() + minutes * 60_000) : null;
 
-        // re-banning the same ip UPDATES the row rather than
-        // making a second one (that's what the UNIQUE rule is for)
+        // re-banning updates the row instead of adding another
         const result = await query(
             `INSERT INTO banned_ips (ip, banned_until, reason)
              VALUES ($1, $2, $3)

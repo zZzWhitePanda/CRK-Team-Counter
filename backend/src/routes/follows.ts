@@ -1,18 +1,4 @@
-// ============================================================
-// routes/follows.ts - following other players.
-//
-// POST /api/follows/:id        follow / unfollow (a toggle)
-// GET  /api/follows/:id/followers   who follows them
-// GET  /api/follows/:id/following   who they follow
-//
-// Keyed by user id, not username, for the same reason profiles are:
-// a rename must never break anything that points at a person.
-//
-// Following works exactly like liking a build: one row per
-// relationship, with a UNIQUE rule in the database so the same
-// person can't be followed twice, plus a CHECK that stops anyone
-// following themselves.
-// ============================================================
+// /api/follows - following other players
 
 import { Router, Request, Response } from 'express';
 import { query } from '../db';
@@ -20,7 +6,7 @@ import { requireAuth } from '../auth';
 
 export const followsRouter = Router();
 
-// Find a user by their id.
+// find a user by id
 async function findUser(id: string) {
     const userId = Number(id);
     if (!Number.isInteger(userId)) return undefined;
@@ -29,7 +15,7 @@ async function findUser(id: string) {
     return result.rows[0] as { user_id: number; username: string } | undefined;
 }
 
-// ---- FOLLOW / UNFOLLOW (login required) ----
+// follow / unfollow
 followsRouter.post('/:id', requireAuth, async (req: Request, res: Response) => {
     try {
         const target = await findUser(String(req.params.id));
@@ -40,13 +26,12 @@ followsRouter.post('/:id', requireAuth, async (req: Request, res: Response) => {
 
         const me = req.user!.userId;
         if (target.user_id === me) {
-            // the database would reject this too (no_self_follow),
-            // but a clear message is nicer than a constraint error
+            // the database blocks this too, but this reads better
             res.status(400).json({ error: "You can't follow yourself." });
             return;
         }
 
-        // already following? then this click unfollows.
+        // already following, so unfollow
         const existing = await query(
             'SELECT 1 FROM follows WHERE follower_id = $1 AND following_id = $2',
             [me, target.user_id]
@@ -65,8 +50,7 @@ followsRouter.post('/:id', requireAuth, async (req: Request, res: Response) => {
             following = true;
         }
 
-        // send back the new follower count so the page can update
-        // without asking again
+        // send the new count back
         const count = await query(
             'SELECT COUNT(*) AS n FROM follows WHERE following_id = $1', [target.user_id]);
 
@@ -82,8 +66,7 @@ followsRouter.post('/:id', requireAuth, async (req: Request, res: Response) => {
     }
 });
 
-// ---- WHO FOLLOWS THEM / WHO THEY FOLLOW (public) ----
-// Both lists are the same shape, so one handler builds either.
+// followers and following, both the same shape
 function listRoute(kind: 'followers' | 'following') {
     return async (req: Request, res: Response) => {
         try {
@@ -93,14 +76,7 @@ function listRoute(kind: 'followers' | 'following') {
                 return;
             }
 
-            // followers -> people whose follow points AT them
-            // following -> people they point at
-            //
-            // These two column names are the only part of the query
-            // built by joining strings, and they come from this fixed
-            // list - NOT from anything the user typed - so there is
-            // no way to inject SQL here (NFR05). The username still
-            // goes in as a $1 placeholder like everywhere else.
+            // these column names come from a fixed list, not user input (NFR05)
             const [matchColumn, pickColumn] = kind === 'followers'
                 ? ['following_id', 'follower_id']
                 : ['follower_id', 'following_id'];

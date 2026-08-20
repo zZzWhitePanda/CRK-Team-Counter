@@ -1,10 +1,4 @@
-// ============================================================
-// SortControls.tsx - the "Sort by [dropdown] [direction]" bar.
-//
-// Styled after paimon.moe: a proper drop-down for the field, and a
-// separate button next to it that flips ascending / descending.
-// Shared by the Cookies page and the cookie picker.
-// ============================================================
+// the sort by dropdown and direction button
 
 import { ArrowDownWideNarrow, ArrowUpNarrowWide } from 'lucide-react';
 import { SortField, SORT_OPTIONS, directionLabel } from '../cookieSort';
@@ -14,7 +8,7 @@ interface Props {
     ascending: boolean;
     onFieldChange: (f: SortField) => void;
     onToggleDirection: () => void;
-    compact?: boolean;      // slightly smaller inside the picker popup
+    compact?: boolean;      // smaller version
 }
 
 export function SortControls({ field, ascending, onFieldChange, onToggleDirection, compact }: Props) {

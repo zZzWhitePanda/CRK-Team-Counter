@@ -1,10 +1,4 @@
-// ============================================================
-// routes/auth.ts - sign up, log in, and "who am I".
-//
-// POST /api/auth/signup  {username, email, password}
-// POST /api/auth/login   {email, password}
-// GET  /api/auth/me      (Bearer token) -> the logged-in user
-// ============================================================
+// /api/auth - sign up, log in, and who am I
 
 import { Router, Request, Response } from 'express';
 import { query } from '../db';
@@ -13,7 +7,7 @@ import { readTitles, isMod, isAdmin, isOwner } from '../permissions';
 
 export const authRouter = Router();
 
-// small helper: the safe public view of a user (never the hash!)
+// the safe public view of a user, never the password hash
 interface UserRow {
     user_id: number; username: string; email: string; is_admin: boolean;
     avatar?: string | null; avatar_data?: string | null;
@@ -25,10 +19,7 @@ function publicUser(row: UserRow) {
     return {
         userId: row.user_id, username: row.username, email: row.email,
         isAdmin: isAdmin(titles),
-        // the effective role, worked out from the person's titles
-        // (see permissions.ts). Kept as a plain string so the
-        // frontend doesn't have to reason about titles for the
-        // simple "can I see the admin nav item" case.
+        // the role, worked out from their titles
         role: isOwner(titles) ? 'owner'
             : isAdmin(titles) ? 'admin'
             : isMod(titles)   ? 'mod'
@@ -41,19 +32,15 @@ function publicUser(row: UserRow) {
     };
 }
 
-// The columns every route below reads back, kept in one place so
-// they can't drift apart.
+// the columns every route below reads
 const USER_COLUMNS =
     'user_id, username, email, is_admin, avatar, avatar_data, titles, theme, username_changed_at';
 
-// ---- username-change cooldown ----
-// Renaming is limited to once every 3 days: it plays with the
-// name-hold pool so someone can't churn through names and burn
-// through the pool's 14-day slots.
+// you can only rename once every few days
 export const RENAME_COOLDOWN_DAYS = 3;
 export const NAME_HOLD_DAYS = 14;
 
-/** When the current user may next change their username, or null. */
+// when they may next rename, or null
 function nextRenameAllowed(lastChanged: Date | string | null): string | null {
     if (!lastChanged) return null;
     const next = new Date(lastChanged);
@@ -61,13 +48,8 @@ function nextRenameAllowed(lastChanged: Date | string | null): string | null {
     return next.getTime() > Date.now() ? next.toISOString() : null;
 }
 
-/**
- * Is this name available for `userId` to take (either the
- * username field on some other row, or someone else's hold)?
- * Case-insensitive to match the UNIQUE rule. Empty error message
- * = it's free.
- */
-/** Human-readable "you're banned because…" message. */
+// is this name free? returns an error message, or '' if it is
+// the banned message
 function banMessage(reason: string | null, until: Date | string | null, ip = false): string {
     const who = ip ? 'This IP address' : 'This account';
     const parts = [`${who} has been banned.`];
@@ -90,7 +72,7 @@ async function nameConflict(username: string, userId: number | null): Promise<st
         return 'That username is already taken.';
     }
 
-    // an unexpired hold blocks anyone but the person the hold is for
+    // a hold blocks everyone but the person it's for
     const held = await query(
         `SELECT held_for_user_id FROM username_holds
          WHERE username_lower = $1 AND expires_at > NOW()`,
@@ -101,25 +83,20 @@ async function nameConflict(username: string, userId: number | null): Promise<st
     return '';
 }
 
-// ---- checking an uploaded profile picture ----
-// The browser shrinks the picture to 128x128 and re-compresses it
-// before sending, so anything arriving here should be tiny. This
-// still checks it properly, because the browser is the USER'S side
-// of the app and a determined person can send whatever they like
-// straight to the API (NFR05).
-const MAX_AVATAR_BYTES = 200 * 1024;   // 200 KB - ~10x a normal upload
+// check an uploaded picture. the browser already shrank it,
+// but it can't be trusted (NFR05)
+const MAX_AVATAR_BYTES = 200 * 1024;   // 200 KB
 
 function checkAvatarData(value: unknown): { ok: true } | { ok: false; error: string } {
-    if (value === null) return { ok: true };          // null = remove the picture
+    if (value === null) return { ok: true };          // null removes it
     if (typeof value !== 'string') {
         return { ok: false, error: 'That picture could not be read.' };
     }
-    // must be an image data URI, not a link to somewhere else and not
-    // some other kind of file dressed up as one
+    // must be an image data URI
     if (!/^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/.test(value)) {
         return { ok: false, error: 'Please choose a PNG, JPEG or WebP image.' };
     }
-    // base64 is 4 characters per 3 bytes, so this is the real size
+    // work out the real size from the base64
     const bytes = Math.floor(value.split(',')[1].length * 3 / 4);
     if (bytes > MAX_AVATAR_BYTES) {
         return { ok: false, error: 'That picture is too big — please pick a smaller one.' };
@@ -127,14 +104,14 @@ function checkAvatarData(value: unknown): { ok: true } | { ok: false; error: str
     return { ok: true };
 }
 
-// ---- SIGN UP ----
+// sign up
 authRouter.post('/signup', async (req: Request, res: Response) => {
     try {
         const username = String(req.body.username ?? '').trim();
         const email = String(req.body.email ?? '').trim().toLowerCase();
         const password = String(req.body.password ?? '');
 
-        // basic validation (checked again by the database rules)
+        // basic checks, the database checks again
         if (username.length < 3) {
             res.status(400).json({ error: 'Username must be at least 3 characters.' });
             return;
@@ -148,18 +125,14 @@ authRouter.post('/signup', async (req: Request, res: Response) => {
             return;
         }
 
-        // The database's UNIQUE rule blocks two users with the
-        // same name, but the hold pool is a separate table so it
-        // has to be checked in code too. Doing it BEFORE the
-        // hashing (which is deliberately slow) saves the effort
-        // when the name is already gone.
+        // check the name before hashing, since hashing is slow
         const clash = await nameConflict(username, null);
         if (clash) {
             res.status(409).json({ error: clash });
             return;
         }
 
-        // hash the password BEFORE it ever touches the database
+        // hash the password before saving it
         const passwordHash = await hashPassword(password);
 
         const result = await query(
@@ -174,8 +147,7 @@ authRouter.post('/signup', async (req: Request, res: Response) => {
         res.status(201).json({ token, user: publicUser(user) });
 
     } catch (err: unknown) {
-        // Postgres error 23505 = a UNIQUE rule was broken, i.e. the
-        // username or email is already taken.
+        // 23505 means the username or email is taken
         if (typeof err === 'object' && err !== null && 'code' in err && err.code === '23505') {
             res.status(409).json({ error: 'That username or email is already taken.' });
             return;
@@ -185,7 +157,7 @@ authRouter.post('/signup', async (req: Request, res: Response) => {
     }
 });
 
-// ---- LOG IN ----
+// log in
 authRouter.post('/login', async (req: Request, res: Response) => {
     try {
         const email = String(req.body.email ?? '').trim().toLowerCase();
@@ -198,21 +170,14 @@ authRouter.post('/login', async (req: Request, res: Response) => {
         );
 
         const user = result.rows[0];
-        // Check the user exists AND the password matches. We give
-        // the same vague message for both so an attacker can't tell
-        // which emails are registered.
+        // same message either way, so emails can't be guessed
         if (!user || !(await checkPassword(password, user.password_hash))) {
             res.status(401).json({ error: 'Wrong email or password.' });
             return;
         }
 
-        // A banned account keeps all its data but can't get back in.
-        // This is checked AFTER the password, so it can't be used to
-        // find out which emails are banned without knowing the password.
-        //
-        // banned_until is when the ban lifts (NULL = permanent). Once
-        // that time passes the account works normally again, without
-        // an admin having to do anything.
+        // checked after the password so bans can't be probed.
+        // banned_until is when it lifts, NULL means permanent
         if (user.banned_at && (user.banned_until === null || new Date(user.banned_until) > new Date())) {
             res.status(403).json({
                 error: banMessage(user.ban_reason, user.banned_until),
@@ -220,9 +185,7 @@ authRouter.post('/login', async (req: Request, res: Response) => {
             return;
         }
 
-        // Refuse anyone signing in from a banned IP, whichever
-        // account they're using. This is what makes an IP ban
-        // actually stop a person coming back on a new account.
+        // refuse banned IPs, whichever account they use
         const ip = req.ip ?? '';
         if (ip) {
             const ipBan = await query(
@@ -235,8 +198,7 @@ authRouter.post('/login', async (req: Request, res: Response) => {
                 });
                 return;
             }
-            // remember the last IP they signed in from, so an owner
-            // can see which IP to add to the ban list later
+            // remember their last IP, for bans
             await query('UPDATE users SET last_ip = $1 WHERE user_id = $2',
                 [ip, user.user_id]);
         }
@@ -250,7 +212,7 @@ authRouter.post('/login', async (req: Request, res: Response) => {
     }
 });
 
-// ---- WHO AM I (used when the site reloads with a saved token) ----
+// who am I, used when the site reloads
 authRouter.get('/me', requireAuth, async (req: Request, res: Response) => {
     try {
         const result = await query(
@@ -268,24 +230,14 @@ authRouter.get('/me', requireAuth, async (req: Request, res: Response) => {
     }
 });
 
-// ---- UPDATE MY PROFILE (username and/or profile picture) ----
-// PATCH /api/auth/me  { username?, avatar?, avatarData? }
-//
-// avatar     = a cookie portrait filename picked from the roster
-// avatarData = a picture the user uploaded, as a data URI
-// Setting one clears the other, because you only have one picture.
+// PATCH /api/auth/me - change username or picture
 authRouter.patch('/me', requireAuth, async (req: Request, res: Response) => {
     try {
-        // Build the update from only the fields that were sent, so
-        // changing just the avatar doesn't wipe the username.
+        // only update the fields that were sent
         const sets: string[] = [];
         const params: unknown[] = [];
 
-        // The rename branch is complicated by two rules:
-        //   * you can only change your name once every 3 days
-        //   * releasing your old name puts it in a hold pool for
-        //     14 days, so nobody else can grab it while you decide
-        //     whether to keep the new one
+        // renaming has a cooldown, and the old name is held for a while
         let renameFrom: string | null = null;
         if (req.body.username !== undefined) {
             const username = String(req.body.username).trim();
@@ -303,8 +255,7 @@ authRouter.patch('/me', requireAuth, async (req: Request, res: Response) => {
                 [req.user!.userId]);
             const currentName = current.rows[0]?.username;
 
-            // re-saving the SAME name doesn't do anything (and
-            // shouldn't start the 3-day cooldown)
+            // saving the same name does nothing
             if (username !== currentName) {
                 const blockedUntil = nextRenameAllowed(current.rows[0]?.username_changed_at);
                 if (blockedUntil) {
@@ -317,8 +268,7 @@ authRouter.patch('/me', requireAuth, async (req: Request, res: Response) => {
                     return;
                 }
 
-                // is it taken - by someone else, or in someone
-                // else's hold slot?
+                // is it taken or held?
                 const clash = await nameConflict(username, req.user!.userId);
                 if (clash) {
                     res.status(409).json({ error: clash });
@@ -333,11 +283,11 @@ authRouter.patch('/me', requireAuth, async (req: Request, res: Response) => {
         }
 
         if (req.body.avatar !== undefined) {
-            // a cookie portrait filename, or null to clear it
+            // a portrait filename, or null
             const avatar = req.body.avatar === null ? null : String(req.body.avatar).trim();
             params.push(avatar);
             sets.push(`avatar = $${params.length}`);
-            // picking a cookie replaces any uploaded picture
+            // picking a cookie clears the upload
             sets.push('avatar_data = NULL');
         }
 
@@ -349,14 +299,12 @@ authRouter.patch('/me', requireAuth, async (req: Request, res: Response) => {
             }
             params.push(req.body.avatarData);
             sets.push(`avatar_data = $${params.length}`);
-            // uploading a picture replaces any chosen cookie portrait
+            // uploading clears the cookie portrait
             sets.push('avatar = NULL');
         }
 
         if (sets.length === 0) {
-            // Nothing actually changed. That's not an error when they
-            // re-saved the name they already have, so just hand back
-            // the account as it stands.
+            // nothing changed, just send the account back
             if (req.body.username !== undefined) {
                 const unchanged = await query(
                     `SELECT ${USER_COLUMNS} FROM users WHERE user_id = $1`, [req.user!.userId]);
@@ -381,10 +329,7 @@ authRouter.patch('/me', requireAuth, async (req: Request, res: Response) => {
 
         const user = result.rows[0];
 
-        // The username they just RELEASED goes into the hold pool
-        // for 14 days: nobody else can take it in that window, but
-        // they can change back to it. ON CONFLICT means picking up
-        // a name they held before just resets its expiry clock.
+        // hold their old name so only they can take it back
         if (renameFrom) {
             await query(
                 `INSERT INTO username_holds (username_lower, held_for_user_id, expires_at)
@@ -394,17 +339,13 @@ authRouter.patch('/me', requireAuth, async (req: Request, res: Response) => {
                         expires_at       = EXCLUDED.expires_at`,
                 [renameFrom.toLowerCase(), req.user!.userId, NAME_HOLD_DAYS]);
 
-            // Their NEW name shouldn't be blocked by any old hold
-            // (their own or nobody's - nameConflict already refused
-            // one held for someone else). Clearing it stops a
-            // stale hold from confusing later checks.
+            // clear any old hold on the new name
             await query(
                 'DELETE FROM username_holds WHERE username_lower = $1',
                 [user.username.toLowerCase()]);
         }
 
-        // the username is inside the login token, so hand back a fresh
-        // token whenever it changes
+        // the name is inside the token, so issue a new one
         const token = makeToken({ userId: user.user_id, username: user.username, isAdmin: user.is_admin });
         res.json({ token, user: publicUser(user) });
 
@@ -419,23 +360,10 @@ authRouter.patch('/me', requireAuth, async (req: Request, res: Response) => {
 });
 
 
-// ============================================================
-// THEMES
-//
-// PUT    /api/auth/me/theme    save the theme I'm using now
-// GET    /api/auth/me/themes   my saved theme presets
-// POST   /api/auth/me/themes   save the current theme as a preset
-// DELETE /api/auth/me/themes/:id   delete one of my presets
-//
-// A theme is stored as JSONB: it's a small bundle of settings that
-// is always read and written whole, so the database never needs to
-// look inside it.
-// ============================================================
+// themes, stored as JSON on the account
 
-// A theme can carry a background picture, so it's much bigger than
-// an avatar. The browser shrinks the picture before sending, but
-// this is checked again here because the browser can't be trusted.
-const MAX_THEME_BYTES = 1_500_000;   // ~1.5 MB of JSON
+// bigger than an avatar because of the background picture
+const MAX_THEME_BYTES = 1_500_000;   // ~1.5 MB
 
 function checkTheme(value: unknown): { ok: true } | { ok: false; error: string } {
     if (typeof value !== 'object' || value === null || Array.isArray(value)) {
@@ -443,8 +371,7 @@ function checkTheme(value: unknown): { ok: true } | { ok: false; error: string }
     }
     const theme = value as Record<string, unknown>;
 
-    // the background picture must be an image, not a link to
-    // somewhere else and not some other kind of file
+    // the background must be an image data URI
     const image = theme.backgroundImage;
     if (image !== null && image !== undefined) {
         if (typeof image !== 'string' || !image.startsWith('data:image/')) {
@@ -457,7 +384,7 @@ function checkTheme(value: unknown): { ok: true } | { ok: false; error: string }
     return { ok: true };
 }
 
-// ---- save the theme I'm currently using ----
+// save the theme I'm using
 authRouter.put('/me/theme', requireAuth, async (req: Request, res: Response) => {
     try {
         const check = checkTheme(req.body.theme);
@@ -474,7 +401,7 @@ authRouter.put('/me/theme', requireAuth, async (req: Request, res: Response) => 
     }
 });
 
-// ---- my saved presets ----
+// my saved presets
 authRouter.get('/me/themes', requireAuth, async (req: Request, res: Response) => {
     try {
         const result = await query(
@@ -488,7 +415,7 @@ authRouter.get('/me/themes', requireAuth, async (req: Request, res: Response) =>
     }
 });
 
-// ---- save the current theme as a named preset ----
+// save a theme under a name
 authRouter.post('/me/themes', requireAuth, async (req: Request, res: Response) => {
     try {
         const name = String(req.body.name ?? '').trim();
@@ -502,9 +429,7 @@ authRouter.post('/me/themes', requireAuth, async (req: Request, res: Response) =
             return;
         }
 
-        // Saving under a name you've already used REPLACES it, which
-        // is what people expect from a "save" button. The UNIQUE rule
-        // on (user_id, name) is what makes ON CONFLICT work here.
+        // saving over a name you've used replaces it
         const result = await query(
             `INSERT INTO user_themes (user_id, name, theme)
              VALUES ($1, $2, $3)
@@ -519,7 +444,7 @@ authRouter.post('/me/themes', requireAuth, async (req: Request, res: Response) =
     }
 });
 
-// ---- delete one of my presets ----
+// delete a preset
 authRouter.delete('/me/themes/:id', requireAuth, async (req: Request, res: Response) => {
     try {
         const themeId = Number(req.params.id);
@@ -527,8 +452,7 @@ authRouter.delete('/me/themes/:id', requireAuth, async (req: Request, res: Respo
             res.status(400).json({ error: 'Invalid theme.' });
             return;
         }
-        // "AND user_id" is the security check - you can only delete
-        // your own presets, never somebody else's
+        // AND user_id means you can only delete your own
         const result = await query(
             'DELETE FROM user_themes WHERE theme_id = $1 AND user_id = $2 RETURNING theme_id',
             [themeId, req.user!.userId]);

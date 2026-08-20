@@ -1,15 +1,4 @@
-// ============================================================
-// TreasureSelector.tsx - the 3 team treasure slots.
-//
-// Treasures are equipped to the whole TEAM (not per cookie), so a
-// team has 3 slots. Click a slot to open a searchable picker of
-// all 45 treasures; click one to equip it.
-//
-// The picker is sorted by RARITY, best first, which is what people
-// expect (the old version listed Common first, which buried the
-// treasures anybody actually wants). A sort control lets you flip
-// that or switch to A-Z, matching the cookie picker.
-// ============================================================
+// the 3 team treasure slots and their picker
 
 import { useState, useMemo } from 'react';
 import { X, Plus, Search, ArrowDownWideNarrow, ArrowUpNarrowWide } from 'lucide-react';
@@ -19,31 +8,30 @@ import {
 } from '../gear';
 
 interface Props {
-    treasures: TeamTreasures;                 // 3 slots
+    treasures: TeamTreasures;                 // the 3 slots
     onChange: (t: TeamTreasures) => void;
 }
 
 type TreasureSort = 'rarity' | 'name';
 
-// each rarity gets its own accent, re-using the cookie rarity
-// tokens so the two pickers feel like the same site
+// colour for a treasure rarity
 function treasureRarityColor(rarity: string): string {
     return `var(--rarity-${rarity.toLowerCase()}, var(--color-primary))`;
 }
 
 export function TreasureSelector({ treasures, onChange }: Props) {
-    // which slot's picker is open (null = none)
+    // which slot's picker is open
     const [picking, setPicking] = useState<number | null>(null);
     const [search, setSearch] = useState('');
     const [sort, setSort] = useState<TreasureSort>('rarity');
-    // false = best first, which is the sensible default for treasures
+    // best first by default
     const [ascending, setAscending] = useState(false);
 
     function setSlot(index: number, key: string | null) {
         onChange(treasures.map((t, i) => i === index ? key : t));
     }
 
-    // filter by the search box, then sort and split into sections
+    // filter by search, then sort and group
     const groups = useMemo(() => {
         const q = search.trim().toLowerCase();
         const list = q ? TREASURES.filter(t => t.name.toLowerCase().includes(q)) : TREASURES;
@@ -54,7 +42,7 @@ export function TreasureSelector({ treasures, onChange }: Props) {
             return [{ key: '', treasures: sorted }];
         }
 
-        // one section per rarity, in rank order
+        // one section per rarity
         const order = ascending ? [...TREASURE_RARITIES] : [...TREASURE_RARITIES].reverse();
         return order
             .map(r => ({

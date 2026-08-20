@@ -1,10 +1,4 @@
-// ============================================================
-// server.ts - the entry point of the backend.
-//
-// Wires everything together: middleware, the API routes, the
-// cookie images, and finally starts listening. Run with:
-//     npm run dev     (auto-restarts when a file changes)
-// ============================================================
+// backend entry point
 
 import express from 'express';
 import cors from 'cors';
@@ -23,26 +17,16 @@ dotenv.config();
 
 const app = express();
 
-// The API is deployed behind Render's proxy, so req.ip comes back
-// as the proxy's address unless we opt in to trusting the
-// X-Forwarded-For header. That header is what actually carries
-// the real client IP - needed for IP bans and last_ip tracking.
-// "1" = trust exactly one proxy hop (Render's), which is the safe
-// setting; blindly trusting all hops would let anyone spoof the
-// header.
+// trust one proxy hop, so we get the real client IP
 app.set('trust proxy', 1);
 const PORT = Number(process.env.PORT) || 4000;
 
-// ---- Middleware (runs before every route) ----
-app.use(cors());          // lets the React dev site (different port) call this API
-// Turns JSON request bodies into req.body. The limit is well above
-// Express's 100kb default because pictures travel INSIDE the JSON:
-// a profile picture (capped at 200 KB by its route) and a theme's
-// background image (capped at ~1.5 MB by its route). This outer
-// limit is the backstop that rejects anything absurd outright.
+// middleware
+app.use(cors());          // lets the frontend call this API
+// read JSON bodies. the limit is high because pictures are sent inside them
 app.use(express.json({ limit: '4mb' }));
 
-// ---- Routes ----
+// routes
 app.use('/api/cookies', cookiesRouter);
 app.use('/api/lookup', lookupRouter);
 app.use('/api/auth', authRouter);
@@ -51,11 +35,7 @@ app.use('/api/users', usersRouter);
 app.use('/api/follows', followsRouter);
 app.use('/api/ip-bans', ipBansRouter);
 
-// the game art, served as normal static files:
-//   GET /images/cookies/gingerbrave.png        (190 cookie portraits)
-//   GET /images/toppings/raspberry.png         (toppings + tart-*.png)
-//   GET /images/beascuits/magic.png            (8 beascuit types)
-//   GET /images/ascension/star-3.png           (ascension stars 1-5)
+// the game images
 const assets = (folder: string) =>
     express.static(path.join(__dirname, '..', '..', 'assets', folder));
 app.use('/images/cookies', assets('cookie-images'));
@@ -63,17 +43,12 @@ app.use('/images/toppings', assets('topping-images'));
 app.use('/images/beascuits', assets('beascuit-images'));
 app.use('/images/ascension', assets('ascension-images'));
 app.use('/images/treasures', assets('treasure-images'));
-//   GET /images/awakening/ancient-3.png   (Ancient/Beast awakening banners)
-//   GET /images/topping-board/raspberry.png (the star topping board)
 app.use('/images/awakening', assets('awakening-images'));
 app.use('/images/topping-board', assets('topping-board'));
-// artwork used for the site's own look, not game data:
-//   GET /images/brand/shadow-milk-hero.png   (the faded character
-//                                             behind the site name)
+// the site's own artwork
 app.use('/images/brand', assets('brand'));
 
-// quick way to check the server is alive (and that the DB name
-// loaded from .env) - handy when deploying to Railway later
+// check the server is alive
 app.get('/api/health', (_req, res) => {
     res.json({ status: 'ok' });
 });

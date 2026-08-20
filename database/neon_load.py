@@ -1,30 +1,18 @@
 #!/usr/bin/env python3
-"""Run .sql files against the live Neon database over HTTPS.
+"""Run .sql files against the live Neon database over HTTPS,
+because port 5432 is blocked on my network.
 
-WHY THIS EXISTS
-My home network black-holes the Postgres connection on port 5432 -
-`psql` just hangs forever on the TLS handshake. Neon also accepts
-SQL over ordinary HTTPS on port 443, which works fine, so this
-script sends each statement that way instead.
-
-USAGE
     export NEON_URL='postgresql://...neon.tech/neondb?sslmode=require'
     python3 neon_load.py migration_roles_themes.sql
-
-The connection string is read from an environment variable so the
-password never ends up in the command line or my shell history.
 """
 import json, os, ssl, sys, urllib.error, urllib.parse, urllib.request
 
-# This Python has no CA bundle of its own, so point it at the
-# system one. (Never turn verification off - that would make the
-# whole HTTPS connection pointless.)
+# use the system certificates
 SSL_CTX = ssl.create_default_context(cafile="/etc/ssl/cert.pem")
 
 
 def split_statements(sql: str):
-    """Split a file on semicolons - but NOT ones inside quotes or
-    comments, which would chop a statement in half."""
+    """Split on semicolons, ignoring ones inside quotes or comments."""
     statements, current = [], []
     in_single = in_double = in_line_comment = False
     i = 0
@@ -95,8 +83,8 @@ def run(sql_url: str, statement: str):
 def main():
     url = os.environ.get("NEON_URL", "")
     if not url:
-        sys.exit("NEON_URL is not set. See the comment at the top of this file.")
-    # node-postgres and this endpoint don't support channel binding
+        sys.exit("NEON_URL is not set. See the top of this file.")
+    # this endpoint doesn't support channel binding
     url = url.replace("&channel_binding=require", "").replace("channel_binding=require&", "")
 
     for path in sys.argv[1:]:

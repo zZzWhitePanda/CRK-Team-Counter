@@ -1,11 +1,4 @@
-// ============================================================
-// CookiePicker.tsx - a visual, searchable cookie chooser.
-//
-// Clicking a slot opens a wide popup showing every cookie with its
-// PORTRAIT, name and rarity. It has the same search + "Sort by"
-// drop-down + direction toggle as the Cookies page, and splits the
-// roster into sections with headings so 190 cookies stay readable.
-// ============================================================
+// searchable cookie chooser popup
 
 import { useState, useMemo } from 'react';
 import { X, Search, Plus } from 'lucide-react';
@@ -15,14 +8,11 @@ import { SortField, groupCookies, rarityColor } from '../cookieSort';
 
 interface CookiePickerProps {
     roster: Cookie[];
-    selectedName: string;            // '' if the slot is empty
-    disabledNames: string[];         // cookies already picked elsewhere
+    selectedName: string;            // '' if empty
+    disabledNames: string[];         // already picked elsewhere
     onPick: (name: string) => void;
     onClear: () => void;
-    // Normally this component draws a team slot that opens the popup
-    // when clicked. startOpen skips the slot and shows just the popup,
-    // so the profile page can re-use it as a plain cookie chooser for
-    // picking a profile picture.
+    // startOpen shows just the popup, with no slot button
     startOpen?: boolean;
     onClose?: () => void;
 }
@@ -32,13 +22,13 @@ export function CookiePicker({
 }: CookiePickerProps) {
     const [open, setOpen] = useState(startOpen === true);
     const [search, setSearch] = useState('');
-    // default = rarity, ascending (Common -> highest rarity)
+    // sorted by rarity by default
     const [sortField, setSortField] = useState<SortField>('rarity');
-    const [ascending, setAscending] = useState(false);  // default = highest first
+    const [ascending, setAscending] = useState(false);  // highest first
 
     const selected = roster.find(c => c.name === selectedName);
 
-    // filter by the search text (name OR type), then group + sort
+    // filter by search, then group and sort
     const groups = useMemo(() => {
         const q = search.trim().toLowerCase();
         const list = q
@@ -49,8 +39,7 @@ export function CookiePicker({
 
     const nResults = groups.reduce((n, g) => n + g.cookies.length, 0);
 
-    // closing has to tell the parent too when we're being used as a
-    // standalone chooser, otherwise it would re-open us straight away
+    // tell the parent, or it would re-open us
     function close() {
         setOpen(false);
         onClose?.();
@@ -58,7 +47,7 @@ export function CookiePicker({
 
     return (
         <>
-            {/* ---- the slot button (not shown in standalone mode) ---- */}
+            {/* the slot button */}
             {startOpen ? null : selected ? (
                 <div className="picker-slot filled" style={{ borderColor: rarityColor(selected.rarity) }}>
                     <button className="picker-slot-main" onClick={() => setOpen(true)} title="Change cookie">
@@ -76,7 +65,7 @@ export function CookiePicker({
                 </button>
             )}
 
-            {/* ---- the picker popup ---- */}
+            {/* the picker popup */}
             {open && (
                 <div className="modal-backdrop" onClick={close}>
                     <div className="modal-card picker-modal" onClick={e => e.stopPropagation()}>

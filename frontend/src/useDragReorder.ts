@@ -1,23 +1,8 @@
-// ============================================================
-// useDragReorder.ts - drag a team slot to a new position.
-//
-// Used by the counter tool and the submit-build form so a player
-// can set their team's ORDER, which matters in game (front/middle/
-// rear positioning).
-//
-// This uses the browser's built-in HTML5 drag and drop rather than
-// a library. The tricky part is that dragging has to move SEVERAL
-// parallel arrays at once - the cookie names and their builds live
-// in separate state - so the hook hands back the from/to indexes
-// and lets the caller move whatever it needs to.
-//
-// Keyboard users are covered too: the caller wires moveLeft and
-// moveRight to buttons, because dragging is mouse-only.
-// ============================================================
+// drag to reorder team slots
 
 import { useState } from 'react';
 
-/** Move one item in an array from `from` to `to`, returning a copy. */
+// move an item in a list
 export function moveItem<T>(list: T[], from: number, to: number): T[] {
     if (from === to || from < 0 || to < 0 || from >= list.length || to >= list.length) {
         return list;
@@ -29,11 +14,11 @@ export function moveItem<T>(list: T[], from: number, to: number): T[] {
 }
 
 export interface DragReorder {
-    /** index currently being dragged, or null */
+    // index being dragged
     dragging: number | null;
-    /** index currently being hovered over as a drop target */
+    // index being hovered
     over: number | null;
-    /** spread onto each draggable slot wrapper */
+    // props for each slot
     slotProps: (index: number) => {
         draggable: boolean;
         onDragStart: (e: React.DragEvent) => void;
@@ -46,9 +31,7 @@ export interface DragReorder {
     };
 }
 
-/**
- * @param onReorder called with (from, to) when a drag completes
- */
+// onReorder(from, to) runs when a drag finishes
 export function useDragReorder(onReorder: (from: number, to: number) => void): DragReorder {
     const [dragging, setDragging] = useState<number | null>(null);
     const [over, setOver] = useState<number | null>(null);
@@ -58,14 +41,12 @@ export function useDragReorder(onReorder: (from: number, to: number) => void): D
             draggable: true,
             onDragStart: (e: React.DragEvent) => {
                 setDragging(index);
-                // Firefox refuses to start a drag unless some data is
-                // set, so this is required even though we never read it.
+                // firefox needs data set to start a drag
                 e.dataTransfer.setData('text/plain', String(index));
                 e.dataTransfer.effectAllowed = 'move';
             },
             onDragOver: (e: React.DragEvent) => {
-                // preventDefault is what marks this as a valid drop
-                // target - without it the browser refuses the drop
+                // marks this as a drop target
                 e.preventDefault();
                 e.dataTransfer.dropEffect = 'move';
             },

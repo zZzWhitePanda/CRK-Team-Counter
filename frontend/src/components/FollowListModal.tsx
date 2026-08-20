@@ -1,11 +1,4 @@
-// ============================================================
-// FollowListModal.tsx - the popup listing someone's followers,
-// or the people they follow.
-//
-// Opened by clicking the follower / following counts on a profile.
-// Every row links to that person's profile, so you can hop from
-// one player to the next.
-// ============================================================
+// popup listing followers or following
 
 import { useEffect, useState } from 'react';
 import { X } from 'lucide-react';
@@ -16,7 +9,7 @@ import { TitleBadges } from './TitleBadge';
 
 interface Props {
     userId: number;
-    username: string;      // only for the heading
+    username: string;      // for the heading
     kind: 'followers' | 'following';
     onClose: () => void;
 }

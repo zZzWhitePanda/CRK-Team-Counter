@@ -1,18 +1,4 @@
-// ============================================================
-// routes/users.ts - profiles and the staff actions.
-//
-// GET   /api/users/:id            profile + that player's builds
-// GET   /api/users                every account (staff)
-// GET   /api/users/lookup?q=...   find an account by id or name
-// POST  /api/users/:id/titles     add a title (admin/owner)
-// DELETE /api/users/:id/titles/:name   remove a title
-// POST  /api/users/:id/ban        ban / unban (admin/owner)
-// POST  /api/ip-bans              ban an IP (owner)
-//
-// Profiles are addressed by user id, not username: /u/7 doesn't
-// break when someone renames themselves. See permissions.ts for
-// the exact rules on who can do what.
-// ============================================================
+// /api/users - profiles and staff actions
 
 import { Router, Request, Response } from 'express';
 import { query } from '../db';
@@ -22,9 +8,7 @@ import { canAwardTitle, hasTitle, isOwner, readTitles, Title } from '../permissi
 export const usersRouter = Router();
 
 
-// ---- LOOKUP an account by id or username ----
-// Used by the admin panel's "Manage account" form so it can take
-// either. Registered before /:id so the paths don't clash.
+// find an account by id or username. must come before /:id
 usersRouter.get('/lookup', requireMod, async (req: Request, res: Response) => {
     try {
         const q = String(req.query.q ?? '').trim();
@@ -32,7 +16,7 @@ usersRouter.get('/lookup', requireMod, async (req: Request, res: Response) => {
             res.status(400).json({ error: 'Enter an id or username.' });
             return;
         }
-        // a bare number is treated as an id, otherwise a name
+        // a number is an id, anything else is a name
         const asId = /^\d+$/.test(q) ? Number(q) : null;
         const result = await query(
             asId !== null
@@ -54,7 +38,7 @@ usersRouter.get('/lookup', requireMod, async (req: Request, res: Response) => {
     }
 });
 
-// ---- EVERY ACCOUNT (staff, for the admin panel) ----
+// every account, for the admin panel
 usersRouter.get('/', requireAdmin, async (_req: Request, res: Response) => {
     try {
         const result = await query(
@@ -71,8 +55,7 @@ usersRouter.get('/', requireAdmin, async (_req: Request, res: Response) => {
 });
 
 
-// ---- MY LIKED BUILDS ----
-// (Registered before /:id so the paths don't clash.)
+// my liked builds. must come before /:id
 usersRouter.get('/me/likes', requireAuth, async (req: Request, res: Response) => {
     try {
         const result = await query(
@@ -95,7 +78,7 @@ usersRouter.get('/me/likes', requireAuth, async (req: Request, res: Response) =>
 });
 
 
-// ---- ONE PROFILE ----
+// one profile
 usersRouter.get('/:id', optionalAuth, async (req: Request, res: Response) => {
     try {
         const userId = Number(req.params.id);
@@ -119,8 +102,7 @@ usersRouter.get('/:id', optionalAuth, async (req: Request, res: Response) => {
         const stillBanned = profile.banned_at
             && (profile.banned_until === null || new Date(profile.banned_until) > new Date());
 
-        // Am I looking at my own profile? If so I also see my private
-        // builds; otherwise only the public ones.
+        // private builds only show on your own profile
         const isMe = req.user?.userId === profile.user_id;
 
         const buildsResult = await query(
@@ -135,7 +117,7 @@ usersRouter.get('/:id', optionalAuth, async (req: Request, res: Response) => {
             [profile.user_id, isMe]
         );
 
-        // which of these builds have I liked? (so hearts show filled)
+        // which of these have I liked?
         let builds = buildsResult.rows;
         if (req.user && builds.length > 0) {
             const liked = await query(
@@ -160,7 +142,7 @@ usersRouter.get('/:id', optionalAuth, async (req: Request, res: Response) => {
         );
         const stats = followStats.rows[0];
 
-        // What the person LOOKING is allowed to do here.
+        // what the viewer is allowed to do
         const viewerTitles = req.user ? await currentTitles(req.user.userId) : [];
         const viewerRole = isOwner(viewerTitles) ? 'owner'
             : hasTitle(viewerTitles, 'Admin') ? 'admin'
@@ -201,13 +183,7 @@ usersRouter.get('/:id', optionalAuth, async (req: Request, res: Response) => {
 });
 
 
-// ============================================================
-// POST /api/users/:id/titles   { name, color? }
-//
-// Awards a title. Admin can only hand out Mod / OG / Content
-// Creator; owner can hand out anything, including custom titles
-// with any colour. See permissions.ts for the exact rules.
-// ============================================================
+// POST /api/users/:id/titles - award a title
 usersRouter.post('/:id/titles', requireAdmin, async (req: Request, res: Response) => {
     try {
         const userId = Number(req.params.id);
@@ -222,7 +198,7 @@ usersRouter.post('/:id/titles', requireAdmin, async (req: Request, res: Response
             return;
         }
 
-        // hex colour check: '#aabbcc' or '#abc'
+        // must be a hex colour
         const color = String(req.body.color ?? '#8B7CF6').trim();
         if (!/^#[0-9a-fA-F]{3,6}$/.test(color)) {
             res.status(400).json({ error: 'Colour must be a hex code like #ff9900.' });
@@ -237,9 +213,7 @@ usersRouter.post('/:id/titles', requireAdmin, async (req: Request, res: Response
             return;
         }
 
-        // Load the target's existing titles, drop any existing
-        // one with the same name (case-insensitive), and add the
-        // new one. Same name twice would look silly on their card.
+        // add the title, replacing one with the same name
         const target = await query('SELECT titles FROM users WHERE user_id = $1', [userId]);
         if (target.rows.length === 0) {
             res.status(404).json({ error: 'That player could not be found.' });
@@ -261,13 +235,7 @@ usersRouter.post('/:id/titles', requireAdmin, async (req: Request, res: Response
 });
 
 
-// ============================================================
-// DELETE /api/users/:id/titles/:name    remove a title
-//
-// Removing "Owner" or "Admin" needs the same power as adding it -
-// owner-only. Removing the last Owner in the system is refused,
-// so the site can never end up with no owner.
-// ============================================================
+// DELETE /api/users/:id/titles/:name - remove a title
 usersRouter.delete('/:id/titles/:name', requireAdmin, async (req: Request, res: Response) => {
     try {
         const userId = Number(req.params.id);
@@ -275,18 +243,14 @@ usersRouter.delete('/:id/titles/:name', requireAdmin, async (req: Request, res: 
 
         const actorTitles = await currentTitles(req.user!.userId);
         if (!canAwardTitle(actorTitles, name)) {
-            // taking away a title needs the same authority as
-            // giving it out - otherwise a mid-rank admin could
-            // strip an owner
+            // removing a title needs the same power as awarding it
             res.status(403).json({
                 error: `You aren't allowed to remove the "${name}" title.`,
             });
             return;
         }
 
-        // Removing the LAST Owner would leave the site with no
-        // owner, so refuse. This also stops one bad decision by
-        // the only owner from bricking the site.
+        // the site must always have at least one owner
         if (name.toLowerCase() === 'owner') {
             const owners = await query(
                 `SELECT COUNT(*) AS n FROM users
@@ -317,17 +281,7 @@ usersRouter.delete('/:id/titles/:name', requireAdmin, async (req: Request, res: 
 });
 
 
-// ============================================================
-// POST /api/users/:id/ban
-//   { banned, reason?, minutes?, ipBan? }
-//
-// minutes = how long the ban lasts. null / missing = permanent.
-// ipBan   = also add the account's last known IP to the IP ban
-//           list, blocking anyone signing in from there.
-//
-// Admin and up. An admin can't ban an owner or another admin,
-// which stops moderators from turning on each other.
-// ============================================================
+// POST /api/users/:id/ban - ban or unban an account
 usersRouter.post('/:id/ban', requireAdmin, async (req: Request, res: Response) => {
     try {
         const userId = Number(req.params.id);
@@ -345,9 +299,7 @@ usersRouter.post('/:id/ban', requireAdmin, async (req: Request, res: Response) =
         }
         const targetTitles = readTitles(target.rows[0].titles);
 
-        // Level-of-authority checks. Only an owner can touch an
-        // owner or an admin. This stops one admin banning another
-        // and, more importantly, protects the site owner.
+        // only an owner can ban an owner or admin
         const actorTitles = await currentTitles(req.user!.userId);
         if (isOwner(targetTitles) && !isOwner(actorTitles)) {
             res.status(403).json({ error: "Only the site owner can ban another owner." });
@@ -358,7 +310,7 @@ usersRouter.post('/:id/ban', requireAdmin, async (req: Request, res: Response) =
             return;
         }
 
-        // ---- do the ban ----
+        // do the ban
         const bannedAt   = banned ? new Date() : null;
         const bannedUntil = banned && minutes
             ? new Date(Date.now() + minutes * 60_000)
@@ -371,8 +323,7 @@ usersRouter.post('/:id/ban', requireAdmin, async (req: Request, res: Response) =
              RETURNING user_id, username, banned_at, banned_until, ban_reason, last_ip`,
             [bannedAt, bannedUntil, banned ? reason : null, userId]);
 
-        // If they wanted an IP ban and we know the target's last
-        // IP, add it to the block list too.
+        // also ban their IP if asked
         if (banned && ipBan) {
             const ip = target.rows[0].last_ip;
             if (!ip) {
@@ -388,9 +339,7 @@ usersRouter.post('/:id/ban', requireAdmin, async (req: Request, res: Response) =
                 [ip, bannedUntil, reason]);
         }
 
-        // When un-banning, drop any IP ban that was placed alongside
-        // this account's ban. That way IP bans are entirely tied to
-        // the account ban and don't need a separate un-ban step.
+        // un-banning also lifts the IP ban
         if (!banned) {
             const ip = target.rows[0].last_ip;
             if (ip) {

@@ -1,18 +1,4 @@
-// ============================================================
-// LevellingPicker.tsx - the level / ascension / awakening
-// controls, shared by the ally build editor and the enemy info
-// editor so both behave identically.
-//
-// There are TWO separate star systems in the game and they stack:
-//
-//   Ascension - every cookie, 1A to 5A, small star badges.
-//   Awakening - ONLY Ancient and Beast cookies, up to 6, shown as
-//               the big winged banner. Ancient and Beast use
-//               different artwork for it.
-//
-// So a Beast cookie can be 5A ascended AND 6-star awakened at the
-// same time; a normal Epic cookie only ever has the ascension row.
-// ============================================================
+// level, ascension and awakening controls
 
 import { Star } from 'lucide-react';
 import {
@@ -21,12 +7,12 @@ import {
 } from '../gear';
 
 interface Props {
-    rarity: string;                // decides whether awakening shows
+    rarity: string;                // awakening only shows for some
     level: number;
     ascension: number;
     awakening: number;
     onChange: (patch: { level?: number; ascension?: number; awakening?: number }) => void;
-    idPrefix?: string;             // keeps <label for> unique when two are on screen
+    idPrefix?: string;             // keeps label ids unique
 }
 
 export function LevellingPicker({
@@ -36,7 +22,7 @@ export function LevellingPicker({
 
     return (
         <div className="levelling">
-            {/* ---- Level ---- */}
+            {/* level */}
             <div className="levelling-level">
                 <label htmlFor={`${idPrefix}-level`} className="field-label">Level</label>
                 <input
@@ -47,14 +33,14 @@ export function LevellingPicker({
                     max={MAX_LEVEL}
                     value={level}
                     onChange={e => {
-                        // clamp so a typo can't save level 9999
+                        // clamp so typos can't go out of range
                         const n = Number(e.target.value);
                         onChange({ level: Number.isFinite(n) ? Math.min(MAX_LEVEL, Math.max(1, n)) : 1 });
                     }}
                 />
             </div>
 
-            {/* ---- Ascension (every cookie) ---- */}
+            {/* ascension */}
             <div className="levelling-track">
                 <span className="field-label">Ascension</span>
                 <div className="ascension-row">
@@ -73,7 +59,7 @@ export function LevellingPicker({
                 </div>
             </div>
 
-            {/* ---- Awakening (Ancient + Beast only) ---- */}
+            {/* awakening, Ancient and Beast only */}
             {style && (
                 <div className="levelling-track">
                     <span className="field-label">
@@ -103,10 +89,7 @@ export function LevellingPicker({
     );
 }
 
-/**
- * The read-only version, for showing somebody else's build. Draws
- * whichever of the two badges the cookie actually has.
- */
+// read-only badges, for viewing someone else's build
 export function LevellingBadges({ rarity, level, ascension, awakening, compact }: {
     rarity: string;
     level: number;

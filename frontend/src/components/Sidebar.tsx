@@ -1,25 +1,13 @@
-// ============================================================
-// Sidebar.tsx - the navigation rail from the mockups.
-// Desktop: fixed left column. Phone: becomes the bottom bar
-// (that switch happens in theme.css with a media query).
-// NavLink adds the "active" class by itself when its page is
-// the one being shown, which gives the highlighted button.
-//
-// The Admin panel link only shows for staff. Non-staff players
-// never see it because they can't do anything with it - the
-// backend refuses their requests anyway.
-// ============================================================
+// side navigation, becomes a bottom bar on phones
 
 import { NavLink } from 'react-router-dom';
 import { Gem, Swords, CircleUserRound, Settings, Shield } from 'lucide-react';
 import { useAuth } from '../auth';
 
-// Shadow Milk Cookie sits faded behind the site name, the way
-// paimon.moe puts a character behind its logo. It's decorative
-// only, so it's aria-hidden and the alt text is empty.
+// decorative image behind the site name
 const HERO_IMAGE = (import.meta.env.VITE_API_URL ?? '') + '/images/brand/shadow-milk-hero.png';
 
-// The regular pages, matching the mockup order and icons.
+// the nav links
 const LINKS = [
     { to: '/builds', label: 'Community Builds', icon: Gem },
     { to: '/counter', label: 'Counter Tool', icon: Swords },

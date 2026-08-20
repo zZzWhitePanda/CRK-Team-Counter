@@ -1,9 +1,4 @@
-// ============================================================
-// AuthModal.tsx - the log in / sign up popup.
-// One component handles both: a toggle switches between "log in"
-// and "sign up" mode. Shows errors near the form (not the top)
-// and disables the button while it's working.
-// ============================================================
+// log in / sign up popup
 
 import { useState, FormEvent } from 'react';
 import { X } from 'lucide-react';
@@ -28,7 +23,7 @@ export function AuthModal({ onClose }: { onClose: () => void }) {
             } else {
                 await signup(username, email, password);
             }
-            onClose();   // success - close the popup
+            onClose();   // success
         } catch (err) {
             setError(err instanceof Error ? err.message : 'Something went wrong.');
         } finally {
@@ -37,9 +32,9 @@ export function AuthModal({ onClose }: { onClose: () => void }) {
     }
 
     return (
-        // the dark backdrop; clicking it closes the popup
+        // clicking the backdrop closes it
         <div className="modal-backdrop" onClick={onClose}>
-            {/* stopPropagation so clicking the card doesn't close it */}
+            {/* don't close when the card is clicked */}
             <div className="modal-card" onClick={e => e.stopPropagation()}>
                 <button className="modal-close" onClick={onClose} aria-label="Close">
                     <X size={20} />
@@ -103,7 +98,7 @@ export function AuthModal({ onClose }: { onClose: () => void }) {
                     </button>
                 </form>
 
-                {/* switch between the two modes */}
+                {/* switch modes */}
                 <p style={{ marginTop: 18, fontSize: 14, textAlign: 'center' }} className="muted">
                     {mode === 'login' ? "No account yet? " : 'Already have an account? '}
                     <button

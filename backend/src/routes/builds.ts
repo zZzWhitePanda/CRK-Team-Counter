@@ -1,14 +1,4 @@
-// ============================================================
-// routes/builds.ts - community counter teams (FR05/FR06/FR07/FR08).
-//
-// GET  /api/builds             browse builds with ?sort= (public)
-// POST /api/builds             submit a build      (login required)
-// POST /api/builds/:id/like    like / unlike       (login required)
-// POST /api/builds/:id/view    count a view        (public)
-//
-// When a logged-in user calls these, each build also comes back
-// with "likedByMe" so the heart can show filled or empty.
-// ============================================================
+// /api/builds - community counter teams (FR05-FR08)
 
 import { Router, Request, Response } from 'express';
 import { query } from '../db';
@@ -17,8 +7,7 @@ import { isMod } from '../permissions';
 
 export const buildsRouter = Router();
 
-// Adds a "likedByMe" flag to each build for the current user.
-// Runs one small query instead of one per build.
+// add a likedByMe flag to each build
 async function markLiked(builds: { build_id: number; likedByMe?: boolean }[], userId: number | undefined) {
     if (!userId || builds.length === 0) return builds;
     const ids = builds.map(b => b.build_id);
@@ -31,30 +20,19 @@ async function markLiked(builds: { build_id: number; likedByMe?: boolean }[], us
     return builds;
 }
 
-// ---- BROWSE BUILDS (public) ----
-// Replaces the old /top endpoint. The order is picked with ?sort=:
-//
-//   likes    - most liked (default)
-//   views    - most viewed
-//   newest   - most recent first
-//   featured - Content-Creator builds first, then most liked
-//
-// The old /top URL still points here so any bookmark keeps working.
+// browse builds, ordered by ?sort=
 const SORTS: Record<string, string> = {
     likes:    'b.likes DESC, b.created_at DESC',
     views:    'b.views DESC, b.created_at DESC',
     newest:   'b.created_at DESC',
-    // "Featured" sorts creators to the top. `titles @> '[{...}]'`
-    // asks Postgres whether that title is in the JSONB array.
+    // featured puts content creators first
     featured: `(u.titles @> '[{"name": "Content Creator"}]') DESC, b.likes DESC, b.created_at DESC`,
 };
 
 async function browse(req: Request, res: Response) {
     try {
         const sortKey = String(req.query.sort ?? 'likes');
-        // `sortBy` is picked from the fixed SORTS map, NOT built
-        // from the query string, so it can't be used to inject SQL
-        // (NFR05). Anything unknown falls back to the default.
+        // the sort comes from a fixed list, not user input (NFR05)
         const sortBy = SORTS[sortKey] ?? SORTS.likes;
 
         const result = await query(
@@ -63,8 +41,7 @@ async function browse(req: Request, res: Response) {
                     b.gear_setup, b.note, b.likes, b.views, b.is_public, b.created_at
              FROM user_builds b
              JOIN users u ON u.user_id = b.user_id
-             -- banned accounts drop out of the public list; their
-             -- builds aren't deleted, so un-banning restores them
+             -- banned accounts drop out until they're un-banned
              WHERE b.is_public = TRUE
                AND (u.banned_at IS NULL
                     OR (u.banned_until IS NOT NULL AND u.banned_until <= NOW()))
@@ -79,9 +56,9 @@ async function browse(req: Request, res: Response) {
 }
 
 buildsRouter.get('/', optionalAuth, browse);
-buildsRouter.get('/top', optionalAuth, browse);   // old URL kept for compatibility
+buildsRouter.get('/top', optionalAuth, browse);   // old URL
 
-// ---- SUBMIT A BUILD (login required, FR05) ----
+// submit a build (FR05)
 buildsRouter.post('/', requireAuth, async (req: Request, res: Response) => {
     try {
         const opponentTeam = req.body.opponentTeam;
@@ -89,14 +66,12 @@ buildsRouter.post('/', requireAuth, async (req: Request, res: Response) => {
         const gearSetup = req.body.gearSetup ?? {};
         const note = String(req.body.note ?? '').trim();
 
-        // validate both teams are arrays of cookie names
+        // both teams must be lists of cookie names
         const okTeam = (t: unknown, min: number) =>
             Array.isArray(t) && t.length >= min && t.length <= 5 &&
             t.every(c => typeof c === 'string' && c.trim() !== '');
 
-        // The enemy team is OPTIONAL: leaving it empty means "this
-        // team works against anything", which is a perfectly normal
-        // thing to want to share. The counter team is still required.
+        // the enemy team is optional, the counter team isn't
         if (!okTeam(opponentTeam, 0)) {
             res.status(400).json({ error: 'The enemy team can have up to 5 cookies.' });
             return;
@@ -105,7 +80,7 @@ buildsRouter.post('/', requireAuth, async (req: Request, res: Response) => {
             res.status(400).json({ error: 'Pick 1-5 cookies for your team.' });
             return;
         }
-        if (note.length > 1000) {   // FR05: note max 1000 chars
+        if (note.length > 1000) {   // FR05: max 1000 chars
             res.status(400).json({ error: 'Your note is too long (max 1000 characters).' });
             return;
         }
@@ -117,7 +92,7 @@ buildsRouter.post('/', requireAuth, async (req: Request, res: Response) => {
             [req.user!.userId, opponentTeam, counterTeam, JSON.stringify(gearSetup), note || null]
         );
 
-        // return it with the author's username attached
+        // send it back with the username
         res.status(201).json({ ...result.rows[0], username: req.user!.username, likedByMe: false });
 
     } catch (err) {
@@ -126,7 +101,7 @@ buildsRouter.post('/', requireAuth, async (req: Request, res: Response) => {
     }
 });
 
-// ---- LIKE / UNLIKE A BUILD (login required, FR06/FR07) ----
+// like / unlike a build (FR06/FR07)
 buildsRouter.post('/:id/like', requireAuth, async (req: Request, res: Response) => {
     try {
         const buildId = Number(req.params.id);
@@ -136,7 +111,7 @@ buildsRouter.post('/:id/like', requireAuth, async (req: Request, res: Response) 
             return;
         }
 
-        // Have they already liked it? If so, this click un-likes.
+        // already liked, so unlike
         const existing = await query(
             `SELECT 1 FROM build_likes WHERE user_id = $1 AND build_id = $2`,
             [userId, buildId]
@@ -147,13 +122,12 @@ buildsRouter.post('/:id/like', requireAuth, async (req: Request, res: Response) 
             await query(`DELETE FROM build_likes WHERE user_id = $1 AND build_id = $2`, [userId, buildId]);
             likedByMe = false;
         } else {
-            // the UNIQUE rule on (user_id, build_id) is the real
-            // guard against double-liking (FR06); this is the happy path
+            // the UNIQUE rule stops double-liking (FR06)
             await query(`INSERT INTO build_likes (user_id, build_id) VALUES ($1, $2)`, [userId, buildId]);
             likedByMe = true;
         }
 
-        // FR07: recount the likes and save the new total on the build
+        // FR07: recount and save the total
         const recount = await query(
             `UPDATE user_builds
              SET likes = (SELECT COUNT(*) FROM build_likes WHERE build_id = $1)
@@ -174,8 +148,7 @@ buildsRouter.post('/:id/like', requireAuth, async (req: Request, res: Response) 
     }
 });
 
-// ---- CHANGE A BUILD'S PRIVACY (owner only) ----
-// PATCH /api/builds/:id  { isPublic: true|false }
+// PATCH /api/builds/:id - show or hide your own build
 buildsRouter.patch('/:id', requireAuth, async (req: Request, res: Response) => {
     try {
         const buildId = Number(req.params.id);
@@ -185,9 +158,7 @@ buildsRouter.patch('/:id', requireAuth, async (req: Request, res: Response) => {
         }
         const isPublic = Boolean(req.body.isPublic);
 
-        // "AND user_id = $2" is the security check: it only updates the
-        // row if it belongs to the person asking, so nobody can change
-        // someone else's build.
+        // AND user_id means you can only change your own build
         const result = await query(
             `UPDATE user_builds SET is_public = $1
              WHERE build_id = $2 AND user_id = $3
@@ -206,7 +177,7 @@ buildsRouter.patch('/:id', requireAuth, async (req: Request, res: Response) => {
     }
 });
 
-// ---- DELETE A BUILD (owner only) ----
+// delete a build
 buildsRouter.delete('/:id', requireAuth, async (req: Request, res: Response) => {
     try {
         const buildId = Number(req.params.id);
@@ -215,15 +186,10 @@ buildsRouter.delete('/:id', requireAuth, async (req: Request, res: Response) => 
             return;
         }
 
-        // Staff can remove ANY build - that's the moderation power.
-        // Everyone else can only remove their own, which is what the
-        // "AND user_id = $2" below enforces.
-        // A moderator (or above) can remove ANY build; everyone
-        // else is restricted to their own by the "AND user_id" below.
+        // mods can delete any build, everyone else only their own
         const isStaff = isMod(await currentTitles(req.user!.userId));
 
-        // The likes for this build are removed automatically by the
-        // ON DELETE CASCADE rule on build_likes.
+        // the likes go with it, via ON DELETE CASCADE
         const result = isStaff
             ? await query(
                 'DELETE FROM user_builds WHERE build_id = $1 RETURNING build_id',
@@ -245,12 +211,7 @@ buildsRouter.delete('/:id', requireAuth, async (req: Request, res: Response) => 
 });
 
 
-// ---- COUNT A VIEW ----
-// The browser POSTs here when the detail popup opens for a
-// build. There's no rate-limit at the server side - the frontend
-// stores which build has been counted today in localStorage, so
-// a refresh doesn't run the number up. Nothing user-facing
-// depends on the count being exact, so that's fine for now.
+// count a view. the browser only sends this once a day per build
 buildsRouter.post('/:id/view', async (req: Request, res: Response) => {
     try {
         const buildId = Number(req.params.id);

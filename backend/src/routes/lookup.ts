@@ -1,12 +1,4 @@
-// ============================================================
-// routes/lookup.ts - the Counter Tool endpoint (FR03/FR04/FR09).
-//
-// POST /api/lookup
-// body: { "enemyTeam": ["Shadow Milk Cookie", ...],
-//         "enemyGear": { "Shadow Milk Cookie": "Swift Chocolate" } }
-//
-// Checks the input, then hands the real work to CounterService.
-// ============================================================
+// POST /api/lookup - the counter tool endpoint (FR03/FR04/FR09)
 
 import { Router, Request, Response } from 'express';
 import { counterService, GearSetup } from '../services/CounterService';
@@ -18,9 +10,7 @@ lookupRouter.post('/', async (req: Request, res: Response) => {
         const enemyTeam = req.body.enemyTeam as unknown;
         const enemyGear = (req.body.enemyGear ?? {}) as GearSetup;
 
-        // FR09: an empty search is rejected with a clear message.
-        // The frontend checks this too, but the server can never
-        // trust the browser - someone can call the API directly.
+        // FR09: reject an empty search. checked here too, never trust the browser
         if (!Array.isArray(enemyTeam) || enemyTeam.length === 0) {
             res.status(400).json({ error: 'Please pick at least one enemy cookie.' });
             return;
@@ -29,7 +19,7 @@ lookupRouter.post('/', async (req: Request, res: Response) => {
             res.status(400).json({ error: 'An enemy team can have at most 5 cookies.' });
             return;
         }
-        // every entry must be a plain string (cookie name)
+        // every entry must be a cookie name
         if (!enemyTeam.every(c => typeof c === 'string' && c.trim() !== '')) {
             res.status(400).json({ error: 'Enemy team contained an invalid cookie.' });
             return;
