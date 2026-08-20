@@ -5,7 +5,7 @@ because port 5432 is blocked on my network.
     export NEON_URL='postgresql://...neon.tech/neondb?sslmode=require'
     python3 neon_load.py migration_roles_themes.sql
 """
-import json, os, ssl, sys, urllib.error, urllib.parse, urllib.request
+import getpass, json, os, re, ssl, sys, urllib.error, urllib.parse, urllib.request
 
 # use the system certificates
 SSL_CTX = ssl.create_default_context(cafile="/etc/ssl/cert.pem")
@@ -80,12 +80,41 @@ def run(sql_url: str, statement: str):
         return json.load(r)
 
 
-def main():
-    url = os.environ.get("NEON_URL", "")
+def connection_string():
+    """The Neon URL, from NEON_URL or typed in when that is not usable.
+
+    It is easy to run this with the placeholder still in place, which used
+    to fail deep inside urllib with a DNS error and a long traceback. This
+    checks the value looks like a real connection string first, and asks
+    for one if it does not.
+    """
+    url = os.environ.get("NEON_URL", "").strip()
+
+    if url and not re.match(r"^postgres(ql)?://\S+@\S+/\S+", url):
+        print("NEON_URL does not look like a connection string, so it is")
+        print("being ignored. It should start with postgresql:// and hold")
+        print("the host and database name.\n")
+        url = ""
+
     if not url:
-        sys.exit("NEON_URL is not set. See the top of this file.")
+        print("Paste the Neon connection string. It is on the Neon")
+        print("dashboard under Connect, and is the same value as")
+        print("DATABASE_URL in the Render dashboard.")
+        print("Nothing is echoed, and it is not saved anywhere.\n")
+        try:
+            url = getpass.getpass("NEON_URL: ").strip()
+        except (EOFError, KeyboardInterrupt):
+            sys.exit("\nCancelled.")
+
+    if not re.match(r"^postgres(ql)?://\S+@\S+/\S+", url):
+        sys.exit("That is not a Postgres connection string. Nothing was run.")
+
     # this endpoint doesn't support channel binding
-    url = url.replace("&channel_binding=require", "").replace("channel_binding=require&", "")
+    return url.replace("&channel_binding=require", "").replace("channel_binding=require&", "")
+
+
+def main():
+    url = connection_string()
 
     for path in sys.argv[1:]:
         sql = open(path).read()
@@ -103,6 +132,12 @@ def main():
             except urllib.error.HTTPError as e:
                 print(f"  [{n}/{len(statements)}] FAILED {label}\n        {e.read().decode()[:400]}")
                 sys.exit(1)
+            except urllib.error.URLError as e:
+                # the host could not be reached at all, so the connection
+                # string is wrong or the network is down
+                print(f"  [{n}/{len(statements)}] FAILED {label}")
+                sys.exit(f"\nCould not reach the database: {e.reason}\n"
+                         "Check the connection string is the real one from Neon.")
 
 
 if __name__ == "__main__":
