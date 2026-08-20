@@ -1,41 +1,39 @@
-// ============================================================
-// CookiesPage.tsx - the searchable roster.
-//
-// Search box + a "Sort by" drop-down with a direction toggle, then
-// filter pills. When sorted by a category the roster is split into
-// sections with a heading for each group (like paimon.moe), which
-// makes 190 cookies much easier to scan than one long list.
-// ============================================================
+// the searchable cookie roster
 
 import { useEffect, useMemo, useState } from 'react';
 import { Search } from 'lucide-react';
-import { Cookie, getCookies, cookieImageUrl } from '../api';
+import { Cookie, PlayerBuild, getCookies, cookieImageUrl } from '../api';
 import { SortControls } from '../components/SortControls';
+import { CookieDetail } from '../components/CookieDetail';
+import { BuildDetail } from '../components/BuildDetail';
 import {
     SortField, TYPES, RARITIES, groupCookies, rarityColor, formatRelease,
 } from '../cookieSort';
 
-// re-exported so older imports of rarityColor keep working
+// re-exported for older imports
 export { rarityColor };
 
 export function CookiesPage() {
     const [cookies, setCookies] = useState<Cookie[]>([]);
-    const [total, setTotal] = useState(0);          // "X of 190 Cookies"
+    const [total, setTotal] = useState(0);          // full roster size
     const [search, setSearch] = useState('');
-    const [type, setType] = useState('');           // '' means All
+    const [type, setType] = useState('');           // '' = all
     const [rarity, setRarity] = useState('');
     const [sortField, setSortField] = useState<SortField>('rarity');
-    const [ascending, setAscending] = useState(false);  // default = highest first
+    const [ascending, setAscending] = useState(false);  // highest first
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(true);
+    // the cookie whose detail popup is open
+    const [openCookie, setOpenCookie] = useState<Cookie | null>(null);
+    // a community build opened from inside that popup
+    const [openBuild, setOpenBuild] = useState<PlayerBuild | null>(null);
 
-    // get the full count once, for the "190 of 190" label
+    // total count, for the label
     useEffect(() => {
         getCookies().then(all => setTotal(all.length)).catch(() => {});
     }, []);
 
-    // re-fetch whenever a filter changes. The 250ms delay (debounce)
-    // stops it firing on every single keystroke.
+    // refetch on filter change, waiting so it doesn't fire per keystroke
     useEffect(() => {
         setLoading(true);
         const timer = setTimeout(() => {
@@ -47,7 +45,7 @@ export function CookiesPage() {
         return () => clearTimeout(timer);
     }, [search, type, rarity]);
 
-    // split the results into sections for the chosen sort
+    // split into sections
     const groups = useMemo(
         () => groupCookies(cookies, sortField, ascending),
         [cookies, sortField, ascending]);
@@ -101,7 +99,7 @@ export function CookiesPage() {
                 <p className="muted">No cookies match those filters. Try clearing one.</p>
             )}
 
-            {/* shimmering placeholders while loading */}
+            {/* loading */}
             {loading && (
                 <div className="cookie-grid">
                     {Array.from({ length: 15 }).map((_, i) => (
@@ -110,7 +108,7 @@ export function CookiesPage() {
                 </div>
             )}
 
-            {/* the roster, split into sections */}
+            {/* the roster */}
             {!loading && groups.map(group => (
                 <section key={group.key || 'all'} style={{ marginBottom: 28 }}>
                     {group.key && (
@@ -126,7 +124,17 @@ export function CookiesPage() {
                             const accent = rarityColor(cookie.rarity);
                             return (
                                 <div key={cookie.cookie_id} className="card card-interactive cookie-card"
-                                    style={{ borderTop: `2px solid ${accent}` }}>
+                                    style={{ borderTop: `2px solid ${accent}` }}
+                                    role="button"
+                                    tabIndex={0}
+                                    onClick={() => setOpenCookie(cookie)}
+                                    // keyboard users can open it too
+                                    onKeyDown={e => {
+                                        if (e.key === 'Enter' || e.key === ' ') {
+                                            e.preventDefault(); setOpenCookie(cookie);
+                                        }
+                                    }}
+                                    title={`${cookie.name} — click for the full details`}>
                                     <img src={cookieImageUrl(cookie.image_file)} alt={cookie.name}
                                         width={76} height={76} loading="lazy"
                                         style={{ objectFit: 'contain', filter: 'drop-shadow(0 4px 8px rgba(0,0,0,0.35))' }} />
@@ -138,8 +146,7 @@ export function CookiesPage() {
                                         <span className="tag">{cookie.type}</span>
                                         <span className="tag">{cookie.position}</span>
                                     </div>
-                                    {/* the release date only earns its space when
-                                        that's what you're sorting by */}
+                                    {/* only shown when sorting by release */}
                                     {sortField === 'release' && (
                                         <div className="cookie-card-release">
                                             {formatRelease(cookie.release_date)}
@@ -151,6 +158,22 @@ export function CookiesPage() {
                     </div>
                 </section>
             ))}
+
+            {openCookie && (
+                <CookieDetail
+                    cookie={openCookie}
+                    onClose={() => setOpenCookie(null)}
+                    onOpenBuild={build => setOpenBuild(build)}
+                />
+            )}
+
+            {openBuild && (
+                <BuildDetail
+                    build={openBuild}
+                    roster={cookies}
+                    onClose={() => setOpenBuild(null)}
+                />
+            )}
         </div>
     );
 }

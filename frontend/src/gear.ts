@@ -1,25 +1,12 @@
-// ============================================================
-// gear.ts - the game data for cookie build customisation.
-//
-// All of this comes from the Cookie Run: Kingdom wiki:
-//   Toppings:      https://cookierunkingdom.fandom.com/wiki/Toppings
-//   Topping Tarts: https://cookierunkingdom.fandom.com/wiki/Topping_Tarts
-//   Beascuits:     https://cookierunkingdom.fandom.com/wiki/Beascuits
-//   Ascension:     https://cookierunkingdom.fandom.com/wiki/Cookie_Upgrading
-//
-// The images live in the backend's assets folders and are served
-// at /images/toppings, /images/beascuits and /images/ascension
-// (see server.ts). The helpers at the bottom build those URLs.
-// ============================================================
+// game data for cookie builds, taken from the CRK wiki
 
 const API_BASE: string = import.meta.env.VITE_API_URL ?? '';
 
-// ---- Toppings -------------------------------------------------
-// The 10 topping flavours. `key` matches the image filename.
+// the 10 topping flavours
 export interface ToppingType {
     key: string;
     name: string;
-    primaryStat: string;   // the main stat this topping gives
+    primaryStat: string;   // main stat
 }
 
 export const TOPPINGS: ToppingType[] = [
@@ -35,20 +22,17 @@ export const TOPPINGS: ToppingType[] = [
     { key: 'hazelnut', name: 'Hearty Hazelnut', primaryStat: 'HP' },
 ];
 
-// The possible sub-stats (bonus effects) a Topping can roll.
-// From the wiki's "Bonus Effects" table.
+// bonus effects a topping can roll
 export const TOPPING_SUBSTATS = [
     'ATK', 'DEF', 'HP', 'ATK SPD', 'CRIT%',
     'Cooldown', 'DMG Resist', 'CRIT Resist', 'Amplify Buff', 'Debuff Resist',
 ];
 
-// ---- Beascuits ("biscuits") -----------------------------------
-// 8 types, one per Cookie class. `key` matches the image filename
-// AND the cookie's type, so we can suggest the matching beascuit.
+// beascuits, one per cookie class
 export interface BeascuitType {
-    key: string;        // cookie class, e.g. 'magic'
+    key: string;        // cookie class
     name: string;       // in-game name
-    cookieType: string; // the Cookie type it fits (matches cookies.type)
+    cookieType: string; // cookie type it fits
 }
 
 export const BEASCUITS: BeascuitType[] = [
@@ -62,59 +46,96 @@ export const BEASCUITS: BeascuitType[] = [
     { key: 'healing', name: 'Sweet Beascuit', cookieType: 'Healing' },
 ];
 
-// A Beascuit gives ATK% and HP% plus bonus buffs. The wiki lists 4
-// bonus-effect slots on a Legendary Beascuit, so the editor asks
-// for these 4 stats.
-export const BEASCUIT_STATS = ['ATK', 'HP', 'Bonus 1', 'Bonus 2'];
+// beascuit rarities, worst to best. the rarity sets how many bonus
+// effects the beascuit has
+export const BEASCUIT_RARITIES = ['Common', 'Rare', 'Epic', 'Legendary'] as const;
+export type BeascuitRarity = typeof BEASCUIT_RARITIES[number];
 
-// ---- Ascension and Awakening ----------------------------------
-// These are TWO SEPARATE systems that stack on top of each other.
-//
-//   Ascension  - every cookie has it, 1A to 5A, shown as the small
-//                star badges (ascension/star-1.png .. star-5.png).
-//
-//   Awakening  - ONLY Ancient and Beast cookies. It goes up to 6,
-//                one higher than ascension, and is shown as the
-//                big winged star banner. Ancient and Beast have
-//                DIFFERENT artwork for it (blue/purple wings vs
-//                gold), so the image depends on the cookie's
-//                rarity as well as the level.
-//
-// Both are 0 when the cookie doesn't have any.
+export const BEASCUIT_BONUS_SLOTS: Record<BeascuitRarity, number> = {
+    Common: 1, Rare: 2, Epic: 3, Legendary: 4,
+};
+
+// the elements a tainted beascuit can carry. `adjective` is the word the
+// game puts in the name, so Earth becomes 'Earthen'. `artSet` is the
+// wiki's artwork number, and several elements share one set
+export interface BeascuitElement {
+    key: string;
+    name: string;
+    adjective: string;
+    artSet: string;
+    color: string;
+}
+
+export const BEASCUIT_ELEMENTS: BeascuitElement[] = [
+    { key: 'darkness',    name: 'Darkness',    adjective: 'Dark',       artSet: '02', color: '#8B5CF6' },
+    { key: 'electricity', name: 'Electricity', adjective: 'Thunderous', artSet: '02', color: '#FACC15' },
+    { key: 'fire',        name: 'Fire',        adjective: 'Burning',    artSet: '03', color: '#F97316' },
+    { key: 'earth',       name: 'Earth',       adjective: 'Earthen',    artSet: '03', color: '#D97706' },
+    { key: 'poison',      name: 'Poison',      adjective: 'Poisonous',  artSet: '04', color: '#A3E635' },
+    { key: 'light',       name: 'Light',       adjective: 'Gleaming',   artSet: '04', color: '#FDE68A' },
+    { key: 'water',       name: 'Water',       adjective: 'Surging',    artSet: '04', color: '#38BDF8' },
+    { key: 'ice',         name: 'Ice',         adjective: 'Frozen',     artSet: '05', color: '#A5F3FC' },
+    { key: 'steel',       name: 'Steel',       adjective: 'Steelen',    artSet: '05', color: '#94A3B8' },
+    { key: 'grass',       name: 'Grass',       adjective: 'Verdant',    artSet: '06', color: '#4ADE80' },
+    { key: 'wind',        name: 'Wind',        adjective: 'Wuthering',  artSet: '06', color: '#CBD5E1' },
+];
+
+export function findElement(key: string | null): BeascuitElement | null {
+    if (!key) return null;
+    return BEASCUIT_ELEMENTS.find(e => e.key === key) ?? null;
+}
+
+// the bonus effects any beascuit can roll
+export const BEASCUIT_SUBSTATS = [
+    'ATK', 'DEF', 'HP', 'ATK SPD', 'CRIT%', 'DMG Resist', 'CRIT Resist',
+    'Cooldown', 'Amplify Buff', 'Debuff Resist', 'DMG Resist Bypass',
+];
+
+// an elemental beascuit can also roll its own element's DMG bonus, which a
+// plain one cannot, so the options depend on the element
+export function beascuitSubstatOptions(elementKey: string | null): string[] {
+    const element = findElement(elementKey);
+    return element ? [element.name + ' DMG', ...BEASCUIT_SUBSTATS] : [...BEASCUIT_SUBSTATS];
+}
+
+// the full in-game name, e.g. 'Legendary Earthen Zesty Beascuit'
+export function beascuitName(
+    typeKey: string, rarity: BeascuitRarity, elementKey: string | null, anniversary = false,
+): string {
+    const type = BEASCUITS.find(b => b.key === typeKey);
+    const flavour = type ? type.name.replace(' Beascuit', '') : '';
+    const element = findElement(elementKey);
+    const parts = [anniversary ? '4th Anniversary' : '', rarity, element ? element.adjective : '', flavour, 'Beascuit'];
+    return parts.filter(Boolean).join(' ');
+}
+
+// ascension (1-5, all cookies) and awakening (1-6, Ancient/Beast only)
 export const ASCENSION_LEVELS = [0, 1, 2, 3, 4, 5];
 export const AWAKENING_LEVELS = [0, 1, 2, 3, 4, 5, 6];
 
-// which rarities get the awakening track at all
+// rarities that awaken
 const AWAKENING_RARITIES = ['Ancient', 'Beast'];
 
-/** Does this cookie rarity have the awakening system? */
+// does this rarity awaken?
 export function hasAwakening(rarity: string): boolean {
     return AWAKENING_RARITIES.includes(rarity);
 }
 
-/**
- * Which awakening artwork a cookie uses. Ancient cookies get the
- * blue/purple winged stars, Beast cookies the gold ones.
- * Returns null for rarities that don't awaken at all.
- */
+// which awakening artwork to use
 export function awakeningStyle(rarity: string): 'ancient' | 'beast' | null {
     if (rarity === 'Ancient') return 'ancient';
     if (rarity === 'Beast') return 'beast';
     return null;
 }
 
-// ---- Treasures ------------------------------------------------
-// Treasures are equipped to the whole TEAM (3 slots), not per cookie.
-// All 45 are from https://cookierunkingdom.fandom.com/wiki/Treasure
-// `key` matches the image filename in assets/treasure-images/.
+// treasures, equipped to the team in 3 slots
 export interface Treasure {
     key: string;
     name: string;
     rarity: TreasureRarity;
 }
 
-// Treasure rarities, worst to best. The index in this list IS the
-// rank, the same trick the cookie rarity sort uses.
+// treasure rarities, worst to best
 export const TREASURE_RARITIES = ['Common', 'Rare', 'Special', 'Epic'] as const;
 export type TreasureRarity = typeof TREASURE_RARITIES[number];
 
@@ -169,40 +190,47 @@ export const TREASURES: Treasure[] = [
     { key: 'vial-of-raging-dunes', name: 'Vial of Raging Dunes', rarity: 'Epic' },
 ];
 
-// a team's treasures = 3 slots (each a treasure key, or null if empty)
+// a team's 3 treasure slots
 export type TeamTreasures = (string | null)[];
 export function emptyTreasures(): TeamTreasures { return [null, null, null]; }
 
-// ---- the build stored for one cookie --------------------------
+// the build for one cookie
 export interface SubStat { stat: string; value: number; }
 
 export interface ToppingSlot {
-    toppingKey: string;   // which flavour
-    isTart: boolean;      // a Topping Tart instead of a normal Topping
-    substats: SubStat[];  // the bonus effects the player set
+    toppingKey: string;   // flavour
+    isTart: boolean;      // tart instead of normal topping
+    substats: string[];   // bonus effects, names only
 }
 
-export interface BeascuitBuild { key: string; stats: SubStat[]; }
+export interface BeascuitBuild {
+    key: string;                 // the type, e.g. 'magic'
+    rarity: BeascuitRarity;      // decides how many bonus effects it has
+    element: string | null;      // null on a plain beascuit
+    anniversary?: boolean;       // the 4th Anniversary version
+    substats: string[];          // one per bonus slot, names only
+}
 
-// The FULL build for one of YOUR cookies (used when making a
-// community build). A cookie has 5 topping slots PLUS one separate
-// Topping Tart slot, a beascuit, ascension and level.
+// a fresh beascuit of the given type, with empty bonus slots
+export function emptyBeascuit(typeKey: string): BeascuitBuild {
+    return { key: typeKey, rarity: 'Legendary', element: null, substats: [] };
+}
+
+// the full build for one of your cookies
 export interface CookieBuild {
-    toppings: (ToppingSlot | null)[];  // exactly 5 slots (normal toppings)
-    tart: string | null;              // the single Topping Tart flavour (or none)
+    toppings: (ToppingSlot | null)[];  // 5 slots
+    tart: string | null;              // topping tart flavour
     beascuit: BeascuitBuild | null;
-    ascension: number;                 // 0-5, every cookie
-    awakening: number;                 // 0-6, Ancient + Beast cookies only
+    ascension: number;                 // 0-5
+    awakening: number;                 // 0-6, Ancient/Beast only
     level: number;                     // 1-100
 }
 
-// Most people building a team are at or near max level, so 100 is a
-// far more useful starting point than 1 - it saves typing on every
-// single cookie.
+// most players are near max level, so start there
 export const DEFAULT_LEVEL = 100;
 export const MAX_LEVEL = 100;
 
-// a fresh, empty build (5 empty topping slots, nothing else set)
+// a fresh, empty build
 export function emptyBuild(): CookieBuild {
     return {
         toppings: [null, null, null, null, null],
@@ -211,41 +239,38 @@ export function emptyBuild(): CookieBuild {
     };
 }
 
-// What you can see of an ENEMY cookie in-game: only their level,
-// ascension and (for Ancient/Beast) awakening - you can't see
-// their toppings, tart or beascuit.
+// what you can see of an enemy cookie in game
 export interface EnemyInfo { ascension: number; awakening: number; level: number; }
 export function emptyEnemyInfo(): EnemyInfo {
     return { ascension: 0, awakening: 0, level: DEFAULT_LEVEL };
 }
 
-// ---- image URL helpers ----------------------------------------
+// image url helpers
 export function toppingImageUrl(toppingKey: string, isTart: boolean) {
     return `${API_BASE}/images/toppings/${isTart ? 'tart-' : ''}${toppingKey}.png`;
 }
-export function beascuitImageUrl(key: string) {
+// the artwork changes with the element, so an Earthen beascuit does not
+// look like a plain one
+export function beascuitImageUrl(key: string, elementKey: string | null = null, anniversary = false) {
+    const element = findElement(elementKey);
+    const set = anniversary ? '99' : (element ? element.artSet : '01');
+    return `${API_BASE}/images/beascuits/${key}-${set}.png`;
+}
+
+// the plain picture, used when a variant one is missing
+export function beascuitFallbackUrl(key: string) {
     return `${API_BASE}/images/beascuits/${key}.png`;
 }
 export function ascensionImageUrl(level: number) {
     return `${API_BASE}/images/ascension/star-${level}.png`;
 }
 
-/**
- * The big winged-star banner for an awakened Ancient or Beast
- * cookie. `style` comes from awakeningStyle(cookie.rarity).
- */
+// the winged star banner for an awakened cookie
 export function awakeningImageUrl(style: 'ancient' | 'beast', level: number) {
     return `${API_BASE}/images/awakening/${style}-${level}.png`;
 }
 
-/**
- * The star-shaped topping board the toppings sit in.
- *
- * The game bakes the equipped Topping Tart's jewelled frame into
- * the board art, so swapping the tart swaps the whole picture -
- * no tart is a plain cookie star, a raspberry tart adds the red
- * frame, and so on. Pass null for "no tart".
- */
+// the topping board, art changes with the equipped tart
 export function toppingBoardUrl(tartKey: string | null) {
     return `${API_BASE}/images/topping-board/${tartKey ?? 'none'}.png`;
 }

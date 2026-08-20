@@ -1,46 +1,19 @@
-// ============================================================
-// ToppingCircle.tsx - the in-game topping board.
-//
-// Cookie Run: Kingdom lays toppings out on a star-shaped board
-// with one topping sitting INSIDE each of the star's five wedges,
-// and the equipped Topping Tart forms the jewelled frame behind
-// it. This reproduces that.
-//
-// The board art is the game's own, taken from the wiki:
-//   Topping tart base.png        -> topping-board/none.png
-//   Topping tart <flavour> 3.png -> topping-board/<flavour>.png
-// at 272px, which is the size the game's own UI uses.
-//
-// The five slots are placed at 72-degree intervals starting at
-// the top, at a radius that lands them in the middle of each
-// wedge rather than floating in a ring outside the star.
-// ============================================================
+// the star-shaped topping board with 5 slots
 
 import React, { useState } from 'react';
 import { X, Plus, Trash2 } from 'lucide-react';
 import {
-    TOPPINGS, TOPPING_SUBSTATS, ToppingSlot, SubStat,
+    TOPPINGS, TOPPING_SUBSTATS, ToppingSlot,
     toppingImageUrl, toppingBoardUrl,
 } from '../gear';
 
 interface ToppingCircleProps {
     slots: (ToppingSlot | null)[];        // the 5 slots
-    tart: string | null;                  // equipped tart, re-skins the board
+    tart: string | null;                  // equipped tart, changes the art
     onChange: (slots: (ToppingSlot | null)[]) => void;
 }
 
-// Each of the 5 slots sits at a 72-degree interval around the board.
-// The shared distance from centre lives in CSS as --wedge-radius;
-// each wedge then gets a tiny per-slot nudge because the star art
-// isn't perfectly 5-fold symmetric. The two nudge tables exist
-// because the plain "none" board asset is a different aspect ratio
-// (272x272) to every tart board (272x281), so the star sits in a
-// slightly different spot in each — separate calibrations keep
-// both cases lined up.
-// Percentages of the board width, so they scale on mobile. Kept
-// here (not in theme.css) so a wrapper element's inline
-// --slot-N-dx can override — theme.css sitting on .topping-board
-// itself would beat any inherited value.
+// small position tweaks per slot, one set per board size
 const SLOT_NUDGE_TART: Array<{dx: string; dy: string}> = [
     { dx: '-0.31%', dy: '-1.56%' },
     { dx:  '0.94%', dy: '-0.94%' },
@@ -57,27 +30,36 @@ const SLOT_NUDGE_NONE: Array<{dx: string; dy: string}> = [
 ];
 
 function slotPosition(i: number, hasTart: boolean) {
-    const angle = (-90 + i * 72) * (Math.PI / 180);   // degrees -> radians
+    const angle = (-90 + i * 72) * (Math.PI / 180);   // to radians
     const n = (hasTart ? SLOT_NUDGE_TART : SLOT_NUDGE_NONE)[i];
     return {
         left: `calc(50% + var(--wedge-radius) * ${Math.cos(angle).toFixed(4)} + var(--slot-${i}-dx, ${n.dx}))`,
         top:  `calc(50% + var(--wedge-radius) * ${Math.sin(angle).toFixed(4)} + var(--slot-${i}-dy, ${n.dy}))`,
-        // Each wedge points a different way, and in game the topping
-        // is TILTED to sit square in its wedge rather than all five
-        // pointing straight up. Slot 0 is the top wedge (no tilt) and
-        // every slot after it is another 72 degrees round.
+        // tilt each topping to sit square in its wedge
         '--wedge-tilt': `${i * 72}deg`,
     } as React.CSSProperties;
 }
 
 export function ToppingCircle({ slots, tart, onChange }: ToppingCircleProps) {
-    // which slot's editor is open (null = none)
+    // which slot's editor is open
     const [editing, setEditing] = useState<number | null>(null);
+    // which filled slot is being dragged, so it can be copied to an empty one
+    const [dragging, setDragging] = useState<number | null>(null);
+    const [dropTarget, setDropTarget] = useState<number | null>(null);
 
     function setSlot(index: number, value: ToppingSlot | null) {
         const next = [...slots];
         next[index] = value;
         onChange(next);
+    }
+
+    // Dragging a finished topping onto an empty slot copies it, so the same
+    // sub-stats do not have to be entered five times over. The copy is a new
+    // object so editing one slot later does not change the other.
+    function copyTo(from: number, to: number) {
+        const source = slots[from];
+        if (!source || slots[to]) return;
+        setSlot(to, { ...source, substats: [...source.substats] });
     }
 
     const filled = slots.filter(Boolean).length;
@@ -86,7 +68,7 @@ export function ToppingCircle({ slots, tart, onChange }: ToppingCircleProps) {
     return (
         <div className="topping-board-wrap">
             <div className={'topping-board' + (filled === 5 ? ' complete' : '')}>
-                {/* The star board. Its artwork already includes the
+                {/* the star board. Its artwork already includes the
                     tart's jewelled frame, so swapping the tart swaps
                     the whole board - exactly like the game does. */}
                 <img
@@ -95,24 +77,51 @@ export function ToppingCircle({ slots, tart, onChange }: ToppingCircleProps) {
                     alt={tartName ? `${tartName} Topping Tart equipped` : 'No Topping Tart equipped'}
                 />
 
-                {/* one topping sitting in each of the five wedges */}
+                {/* the five toppings */}
                 {slots.map((slot, i) => {
                     const pos = slotPosition(i, tart !== null);
                     const topping = slot ? TOPPINGS.find(t => t.key === slot.toppingKey) : null;
                     return (
                         <button
                             key={i}
-                            className={'topping-wedge' + (slot ? ' filled' : '')}
+                            className={'topping-wedge'
+                                + (slot ? ' filled' : '')
+                                + (dragging === i ? ' dragging' : '')
+                                + (dropTarget === i ? ' drop-target' : '')}
                             style={pos}
                             onClick={() => setEditing(i)}
-                            title={topping ? topping.name : 'Empty slot — click to add a topping'}
+                            draggable={slot !== null}
+                            onDragStart={e => {
+                                if (!slot) return;
+                                setDragging(i);
+                                // firefox needs data set to start a drag
+                                e.dataTransfer.setData('text/plain', String(i));
+                                e.dataTransfer.effectAllowed = 'copy';
+                            }}
+                            onDragOver={e => {
+                                if (dragging === null || slots[i]) return;
+                                e.preventDefault();          // marks this as a drop target
+                                e.dataTransfer.dropEffect = 'copy';
+                            }}
+                            onDragEnter={() => { if (dragging !== null && !slots[i]) setDropTarget(i); }}
+                            onDragLeave={() => setDropTarget(t => (t === i ? null : t))}
+                            onDrop={e => {
+                                e.preventDefault();
+                                const from = Number(e.dataTransfer.getData('text/plain'));
+                                if (Number.isInteger(from) && from !== i) copyTo(from, i);
+                                setDragging(null);
+                                setDropTarget(null);
+                            }}
+                            onDragEnd={() => { setDragging(null); setDropTarget(null); }}
+                            title={topping
+                                ? `${topping.name}. Drag onto an empty slot to copy it.`
+                                : 'Empty slot. Click to add a topping, or drop one here to copy it.'}
                             aria-label={topping ? `${topping.name}, click to change` : 'Empty topping slot'}
                         >
                             {slot ? (
                                 <img src={toppingImageUrl(slot.toppingKey, slot.isTart)} alt="" />
                             ) : (
-                                // no size prop - the CSS scales it with the
-                                // board so it stays proportional on a phone
+                                // sized by CSS so it scales with the board
                                 <Plus aria-hidden="true" />
                             )}
                         </button>
@@ -123,6 +132,11 @@ export function ToppingCircle({ slots, tart, onChange }: ToppingCircleProps) {
             <p className="muted topping-board-count">
                 {filled} of 5 toppings{tartName && ` · ${tartName} Tart`}
             </p>
+            {filled > 0 && filled < 5 && (
+                <p className="muted topping-board-hint">
+                    Drag a topping onto an empty slot to copy its sub-stats.
+                </p>
+            )}
 
             {editing !== null && (
                 <ToppingSlotEditor
@@ -136,32 +150,35 @@ export function ToppingCircle({ slots, tart, onChange }: ToppingCircleProps) {
     );
 }
 
-// ---- the popup for one slot: pick a topping, then its sub-stats ----
+// popup for one slot: pick a topping, then its stats
 function ToppingSlotEditor({ slot, onSave, onRemove, onClose }: {
     slot: ToppingSlot | null;
     onSave: (s: ToppingSlot) => void;
     onRemove: () => void;
     onClose: () => void;
 }) {
-    // draft state so nothing changes until "Save"
+    // nothing changes until Save
     const [toppingKey, setToppingKey] = useState(slot?.toppingKey ?? '');
     const [isTart, setIsTart] = useState(slot?.isTart ?? false);
-    const [substats, setSubstats] = useState<SubStat[]>(slot?.substats ?? []);
-    // 'pick' = choosing a topping, 'stats' = setting sub-stats
+    const [substats, setSubstats] = useState<string[]>(slot?.substats ?? []);
+    // which step we're on
     const [step, setStep] = useState<'pick' | 'stats'>(slot ? 'stats' : 'pick');
 
     function choose(key: string) {
         setToppingKey(key);
-        setIsTart(false);   // the board holds normal toppings; tarts are a separate slot
+        setIsTart(false);   // tarts have their own slot
         setStep('stats');
     }
 
     function addSubstat() {
-        if (substats.length >= 3) return;   // max 3 bonus effects (M topping)
-        setSubstats([...substats, { stat: TOPPING_SUBSTATS[0], value: 1 }]);
+        if (substats.length >= 3) return;   // max 3
+        setSubstats([...substats, TOPPING_SUBSTATS[0]]);
     }
-    function updateSubstat(i: number, patch: Partial<SubStat>) {
-        setSubstats(substats.map((s, idx) => idx === i ? { ...s, ...patch } : s));
+    function updateSubstat(i: number, value: string) {
+        setSubstats(substats.map((s, idx) => idx === i ? value : s));
+    }
+    function removeSubstat(i: number) {
+        setSubstats(substats.filter((_, idx) => idx !== i));
     }
 
     return (
@@ -200,20 +217,18 @@ function ToppingSlotEditor({ slot, onSave, onRemove, onClose }: {
                             </div>
                         </div>
 
-                        {/* sub-stat rows: stat drop-down + value */}
+                        {/* sub-stat rows */}
                         {substats.map((s, i) => (
                             <div key={i} style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
-                                <select className="input" value={s.stat}
-                                        onChange={e => updateSubstat(i, { stat: e.target.value })}>
+                                <select className="input" value={s}
+                                        onChange={e => updateSubstat(i, e.target.value)}
+                                        aria-label={`Sub-stat ${i + 1}`}>
                                     {TOPPING_SUBSTATS.map(st => <option key={st} value={st}>{st}</option>)}
                                 </select>
-                                <div style={{ position: 'relative', width: 110, flexShrink: 0 }}>
-                                    <input className="input" type="number" min={0} step={0.1}
-                                        style={{ paddingRight: 24 }}
-                                        value={s.value}
-                                        onChange={e => updateSubstat(i, { value: Number(e.target.value) })} />
-                                    <span style={{ position: 'absolute', right: 12, top: 12, color: 'var(--color-text-muted)' }}>%</span>
-                                </div>
+                                <button className="pill danger icon-only" onClick={() => removeSubstat(i)}
+                                        aria-label={`Remove sub-stat ${i + 1}`}>
+                                    <Trash2 size={15} />
+                                </button>
                             </div>
                         ))}
 

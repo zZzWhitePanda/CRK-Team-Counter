@@ -1,26 +1,13 @@
-// ============================================================
-// buildDetails.ts - reading the rich details saved with a build.
-//
-// When somebody submits a build, the whole thing (every cookie's
-// toppings, tart, beascuit, ascension and level, plus both teams'
-// treasures) is saved into the build's gear_setup column as JSON.
-// The database column is JSONB, so it can hold any shape - which
-// means the frontend gets it back as `unknown` and has to CHECK
-// what's in there before using it.
-//
-// That checking is what this file does. Older builds were saved
-// before the rich format existed, so anything missing has to come
-// back as empty rather than crashing the page.
-// ============================================================
+// reads the build details saved in gear_setup JSON
 
-import { CookieBuild, EnemyInfo } from './gear';
+import { CookieBuild, EnemyInfo, BEASCUIT_RARITIES, BeascuitRarity } from './gear';
 
-// one of YOUR cookies, with its full build
+// one of your cookies
 export interface DetailedCookieBuild extends CookieBuild {
     cookie: string;
 }
 
-// one ENEMY cookie: only the level and ascension are visible in-game
+// one enemy cookie
 export interface DetailedEnemyInfo extends EnemyInfo {
     cookie: string;
 }
@@ -30,14 +17,11 @@ export interface BuildDetails {
     enemyInfo: DetailedEnemyInfo[];
     yourTreasures: string[];
     enemyTreasures: string[];
-    // false when the build was posted before builds carried this
-    // detail, so the page can say so instead of showing empty boxes
+    // false on older builds with no details
     hasDetails: boolean;
 }
 
-// ---- small checkers -------------------------------------------
-// `unknown` values have to be narrowed down before TypeScript will
-// let us read fields off them - these do that safely.
+// type checkers
 
 function isObject(value: unknown): value is Record<string, unknown> {
     return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -55,7 +39,25 @@ function asStrings(value: unknown): string[] {
     return asArray(value).filter((v): v is string => typeof v === 'string');
 }
 
-// ---- the main reader ------------------------------------------
+// Substats are saved as plain names now. Builds posted before that change
+// saved them as { stat, value } objects, so both shapes are read here and
+// the old value is dropped.
+function asSubstatNames(value: unknown): string[] {
+    return asArray(value)
+        .map(entry => {
+            if (typeof entry === 'string') return entry;
+            if (isObject(entry) && typeof entry.stat === 'string') return entry.stat;
+            return null;
+        })
+        .filter((name): name is string => name !== null && name.trim() !== '');
+}
+
+function asRarity(value: unknown): BeascuitRarity {
+    return BEASCUIT_RARITIES.includes(value as BeascuitRarity)
+        ? value as BeascuitRarity : 'Legendary';
+}
+
+// the main reader
 
 export function readBuildDetails(gearSetup: unknown): BuildDetails {
     const empty: BuildDetails = {
@@ -70,27 +72,25 @@ export function readBuildDetails(gearSetup: unknown): BuildDetails {
         .filter(b => typeof b.cookie === 'string')
         .map(b => ({
             cookie: b.cookie as string,
-            // exactly 5 topping slots, so the pentagon always draws
+            // always 5 slots
             toppings: Array.from({ length: 5 }, (_, i) => {
                 const slot = asArray(b.toppings)[i];
                 if (!isObject(slot) || typeof slot.toppingKey !== 'string') return null;
                 return {
                     toppingKey: slot.toppingKey,
                     isTart: slot.isTart === true,
-                    substats: asArray(slot.substats)
-                        .filter(isObject)
-                        .filter(s => typeof s.stat === 'string')
-                        .map(s => ({ stat: s.stat as string, value: asNumber(s.value, 0) })),
+                    substats: asSubstatNames(slot.substats),
                 };
             }),
             tart: typeof b.tart === 'string' ? b.tart : null,
             beascuit: isObject(b.beascuit) && typeof b.beascuit.key === 'string'
                 ? {
                     key: b.beascuit.key,
-                    stats: asArray(b.beascuit.stats)
-                        .filter(isObject)
-                        .filter(s => typeof s.stat === 'string')
-                        .map(s => ({ stat: s.stat as string, value: asNumber(s.value, 0) })),
+                    rarity: asRarity(b.beascuit.rarity),
+                    element: typeof b.beascuit.element === 'string' ? b.beascuit.element : null,
+                    anniversary: b.beascuit.anniversary === true,
+                    // `stats` is the old field name, kept so older builds still open
+                    substats: asSubstatNames(b.beascuit.substats ?? b.beascuit.stats),
                 }
                 : null,
             ascension: asNumber(b.ascension, 0),

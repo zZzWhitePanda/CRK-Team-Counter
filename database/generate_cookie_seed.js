@@ -1,25 +1,14 @@
-// ============================================================
-// CRK Team Builder - Cookie Seed Generator
-//
-// Reads cookie_data.json (the roster scraped from the CRK wiki,
-// https://cookierunkingdom.fandom.com/wiki/List_of_Cookies) and
-// writes cookies_seed.sql, the INSERT statements that fill the
-// cookies table.
-//
-// Run with:  node generate_cookie_seed.js
-// ============================================================
+// Turns cookie_data.json (scraped from the CRK wiki) into
+// cookies_seed.sql. Run with: node generate_cookie_seed.js
 
 const fs = require('fs');   // Node's built-in file system module
 
-// ---- 1. Load the scraped cookie data --------------------------------
+// 1. load the data
 const cookies = JSON.parse(fs.readFileSync('cookie_data.json', 'utf8'));
 console.log(`Loaded ${cookies.length} cookies from cookie_data.json`);
 
-// ---- 2. Helper: make a safe image filename from a cookie name -------
-// "Pudding à la Mode Cookie" -> "pudding-a-la-mode-cookie.png"
-// The images get saved under these names by download_images.js,
-// and the database stores the same name so the frontend can
-// find the right picture for each cookie.
+// 2. turn a cookie name into a filename,
+// e.g. "Pudding a la Mode Cookie" -> "pudding-a-la-mode-cookie.png"
 function imageFileName(name) {
     return name
         .toLowerCase()
@@ -30,43 +19,53 @@ function imageFileName(name) {
         + '.png';
 }
 
-// ---- 3. Helper: escape single quotes for SQL ------------------------
-// SQL strings are wrapped in single quotes, so a name containing
-// one (none do right now, but future cookies might) would break
-// the INSERT unless it is doubled up ('' is how SQL writes ').
+// 3. double up single quotes so they don't break the SQL
 function sqlString(text) {
     return "'" + text.replace(/'/g, "''") + "'";
 }
 
-// ---- 4. Build the SQL file ------------------------------------------
-let sql = `-- ============================================================
--- CRK Team Builder - Cookie Roster Seed (GENERATED FILE)
--- Do not edit by hand! Edit cookie_data.json and re-run:
---     node generate_cookie_seed.js
--- Generated: ${new Date().toISOString().slice(0, 10)}
--- Source: Cookie Run Kingdom Wiki (Fandom) - List of Cookies
--- ============================================================
+// 4. build the SQL
+let sql = `-- Cookie roster seed. GENERATED FILE - don't edit by hand.
+-- Edit cookie_data.json and re-run: node generate_cookie_seed.js
+-- Generated: ${new Date().toISOString().slice(0, 10)}. Source: Cookie Run Kingdom Wiki
 
 TRUNCATE cookies RESTART IDENTITY CASCADE;
 
-INSERT INTO cookies (name, type, position, rarity, image_file, release_date) VALUES
+INSERT INTO cookies (name, type, position, rarity, image_file, release_date,
+                     elements, recommended_toppings, skill_name, skill_cooldown,
+                     skill_description, quote, description, traits, voice_actor) VALUES
 `;
+
+// a Postgres text array, e.g. ARRAY['earth']::text[]
+function sqlArray(values) {
+    const list = Array.isArray(values) ? values : [];
+    if (list.length === 0) return `'{}'::text[]`;
+    return `ARRAY[${list.map(sqlString).join(', ')}]::text[]`;
+}
+
+// NULL rather than an empty string, so the page can tell the two apart
+function sqlOrNull(value) {
+    return value ? sqlString(String(value)) : 'NULL';
+}
 
 const rows = cookies.map(c =>
     `(${sqlString(c.name)}, ${sqlString(c.type)}, ${sqlString(c.position)}, ` +
     `${sqlString(c.rarity)}, ${sqlString(imageFileName(c.name))}, ` +
-    // release comes from the wiki infobox's releasedate field; NULL
-    // for anything the scrape couldn't find, so the sort still works
-    `${c.release ? sqlString(c.release) : 'NULL'})`
+    // NULL when the scrape couldn't find a date
+    `${c.release ? sqlString(c.release) : 'NULL'}, ` +
+    `${sqlArray(c.elements)}, ${sqlArray(c.recommendedToppings)}, ` +
+    `${sqlOrNull(c.skillName)}, ${sqlOrNull(c.skillCooldown)}, ` +
+    `${sqlOrNull(c.skillDescription)}, ${sqlOrNull(c.quote)}, ` +
+    `${sqlOrNull(c.description)}, ${sqlOrNull(c.traits)}, ${sqlOrNull(c.voiceActor)})`
 );
 
 sql += rows.join(',\n') + ';\n';
 
-// ---- 5. Save it ------------------------------------------------------
+// 5. save it
 fs.writeFileSync('cookies_seed.sql', sql);
 console.log(`Wrote cookies_seed.sql with ${rows.length} cookies`);
 
-// Quick summary by rarity so I can sanity-check against the wiki
+// a summary to check against the wiki
 const byRarity = {};
 for (const c of cookies) {
     byRarity[c.rarity] = (byRarity[c.rarity] || 0) + 1;

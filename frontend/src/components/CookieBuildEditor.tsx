@@ -1,18 +1,14 @@
-// ============================================================
-// CookieBuildEditor.tsx - the full build screen for ONE cookie
-// on the user's team: toppings (circle), beascuit, ascension and
-// level. Opens as a popup from the "Your Team" section of the
-// Counter Tool. Only the user's own cookies get this - you can't
-// see the enemy's build in-game, so the enemy side stays plain.
-// ============================================================
+// the full build editor for one of your cookies
 
 import { useState } from 'react';
 import { X, Plus } from 'lucide-react';
 import { Cookie } from '../api';
 import {
-    CookieBuild, BEASCUITS, BEASCUIT_STATS, SubStat, TOPPINGS,
-    beascuitImageUrl, toppingImageUrl,
+    CookieBuild, BEASCUITS, TOPPINGS, toppingImageUrl,
+    BEASCUIT_RARITIES, BEASCUIT_BONUS_SLOTS, BEASCUIT_ELEMENTS, BeascuitRarity,
+    beascuitSubstatOptions, beascuitName, emptyBeascuit, findElement,
 } from '../gear';
+import { BeascuitImage } from './BeascuitImage';
 import { ToppingCircle } from './ToppingCircle';
 import { LevellingPicker } from './LevellingPicker';
 
@@ -24,7 +20,7 @@ interface Props {
 }
 
 export function CookieBuildEditor({ cookie, build, onChange, onClose }: Props) {
-    // patch helper: update part of the build and bubble it up
+    // update part of the build
     const patch = (p: Partial<CookieBuild>) => onChange({ ...build, ...p });
 
     return (
@@ -34,7 +30,7 @@ export function CookieBuildEditor({ cookie, build, onChange, onClose }: Props) {
                 <h2 style={{ marginBottom: 4 }}>{cookie.name}</h2>
                 <p className="muted" style={{ fontSize: 14, marginBottom: 20 }}>Build customisation</p>
 
-                {/* ---- Level, ascension and (if it has one) awakening ---- */}
+                {/* level and stars */}
                 <LevellingPicker
                     rarity={cookie.rarity}
                     level={build.level}
@@ -44,18 +40,18 @@ export function CookieBuildEditor({ cookie, build, onChange, onClose }: Props) {
                     onChange={patch}
                 />
 
-                {/* ---- Toppings (the in-game circle) ---- */}
+                {/* toppings */}
                 <h3 style={{ margin: '24px 0 8px' }}>Toppings</h3>
                 <div style={{ display: 'flex', justifyContent: 'center' }}>
                     <ToppingCircle slots={build.toppings} tart={build.tart}
                         onChange={toppings => patch({ toppings })} />
                 </div>
 
-                {/* ---- Topping Tart (its own single slot) ---- */}
+                {/* topping tart */}
                 <h3 style={{ margin: '16px 0 8px' }}>Topping Tart</h3>
                 <TartSlot tart={build.tart} onChange={tart => patch({ tart })} />
 
-                {/* ---- Beascuit ---- */}
+                {/* beascuit */}
                 <h3 style={{ margin: '16px 0 8px' }}>Beascuit</h3>
                 <BeascuitSelector cookieType={cookie.type} build={build}
                     onChange={beascuit => patch({ beascuit })} />
@@ -68,9 +64,7 @@ export function CookieBuildEditor({ cookie, build, onChange, onClose }: Props) {
     );
 }
 
-// ---- the single Topping Tart slot ----
-// A cookie equips just ONE Topping Tart (separate from the 5 normal
-// toppings), and it only has a primary stat - no sub-stats to set.
+// the single topping tart slot
 function TartSlot({ tart, onChange }: { tart: string | null; onChange: (t: string | null) => void }) {
     const [picking, setPicking] = useState(false);
     const current = TOPPINGS.find(t => t.key === tart);
@@ -114,7 +108,7 @@ function TartSlot({ tart, onChange }: { tart: string | null; onChange: (t: strin
     );
 }
 
-// ---- beascuit: pick one from the list, then enter its 4 stats ----
+// beascuit: pick the type, rarity and element, then its bonus effects
 function BeascuitSelector({ cookieType, build, onChange }: {
     cookieType: string;
     build: CookieBuild;
@@ -124,25 +118,56 @@ function BeascuitSelector({ cookieType, build, onChange }: {
     const current = build.beascuit;
 
     function pick(key: string) {
-        // start with the 4 named stat slots at 0
-        const stats: SubStat[] = BEASCUIT_STATS.map(s => ({ stat: s, value: 0 }));
-        onChange({ key, stats });
+        onChange(emptyBeascuit(key));
         setPicking(false);
     }
-    function updateStat(i: number, value: number) {
+
+    // the rarity sets how many bonus effects there are, so dropping to a
+    // lower rarity has to cut the extra ones off
+    function setRarity(rarity: BeascuitRarity) {
         if (!current) return;
-        onChange({ ...current, stats: current.stats.map((s, idx) => idx === i ? { ...s, value } : s) });
+        const slots = BEASCUIT_BONUS_SLOTS[rarity];
+        onChange({ ...current, rarity, substats: current.substats.slice(0, slots) });
     }
 
-    const currentType = current && BEASCUITS.find(b => b.key === current.key);
+    // changing element invalidates any element DMG bonus already picked,
+    // because a beascuit can only carry its own element's damage bonus
+    function setElement(elementKey: string | null) {
+        if (!current) return;
+        const allowed = beascuitSubstatOptions(elementKey);
+        onChange({
+            ...current,
+            element: elementKey,
+            substats: current.substats.filter(s => allowed.includes(s)),
+        });
+    }
+
+    function setSubstat(index: number, value: string) {
+        if (!current) return;
+        const next = [...current.substats];
+        while (next.length <= index) next.push('');
+        next[index] = value;
+        onChange({ ...current, substats: next });
+    }
+
+    const slots = current ? BEASCUIT_BONUS_SLOTS[current.rarity] : 0;
+    const options = current ? beascuitSubstatOptions(current.element) : [];
+    const element = current ? findElement(current.element) : null;
 
     return (
         <>
             {current ? (
                 <div className="beascuit-current">
-                    <img src={beascuitImageUrl(current.key)} alt="" width={56} height={56} />
-                    <div style={{ flex: 1 }}>
-                        <div style={{ color: 'var(--color-text)', fontWeight: 700 }}>{currentType?.name}</div>
+                    <BeascuitImage
+                        typeKey={current.key}
+                        element={current.element}
+                        anniversary={current.anniversary === true}
+                        size={56}
+                    />
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ color: element ? element.color : 'var(--color-text)', fontWeight: 700 }}>
+                            {beascuitName(current.key, current.rarity, current.element, current.anniversary)}
+                        </div>
                         <button className="link-button" onClick={() => setPicking(true)}>Change</button>
                     </div>
                 </div>
@@ -150,32 +175,95 @@ function BeascuitSelector({ cookieType, build, onChange }: {
                 <button className="pill" onClick={() => setPicking(true)}>Select a beascuit</button>
             )}
 
-            {/* the 4 stat inputs once a beascuit is chosen */}
             {current && (
-                <div className="beascuit-stats">
-                    {current.stats.map((s, i) => (
-                        <div key={i}>
-                            <label className="field-label" style={{ fontSize: 12 }}>{s.stat}</label>
-                            <input className="input" type="number" min={0} step={0.1}
-                                value={s.value}
-                                onChange={e => updateStat(i, Number(e.target.value))} />
-                        </div>
-                    ))}
-                </div>
+                <>
+                    {/* rarity, which decides the number of bonus effects */}
+                    <span className="field-label" style={{ marginTop: 14 }}>Rarity</span>
+                    <div className="beascuit-option-row">
+                        {BEASCUIT_RARITIES.map(r => (
+                            <button
+                                key={r}
+                                className={'pill' + (current.rarity === r ? ' active' : '')}
+                                onClick={() => setRarity(r)}
+                            >
+                                {r}
+                                <span className="beascuit-slot-count">{BEASCUIT_BONUS_SLOTS[r]}</span>
+                            </button>
+                        ))}
+                    </div>
+
+                    {/* element, only on a tainted beascuit */}
+                    <span className="field-label" style={{ marginTop: 14 }}>Element (tainted only)</span>
+                    <div className="beascuit-option-row">
+                        <button
+                            className={'pill' + (current.element === null ? ' active' : '')}
+                            onClick={() => setElement(null)}
+                        >
+                            None
+                        </button>
+                        {BEASCUIT_ELEMENTS.map(el => (
+                            <button
+                                key={el.key}
+                                className={'pill' + (current.element === el.key ? ' active' : '')}
+                                onClick={() => setElement(el.key)}
+                                style={current.element === el.key ? undefined : { color: el.color }}
+                            >
+                                <span className="element-dot" style={{ background: el.color }} />
+                                {el.name}
+                            </button>
+                        ))}
+                    </div>
+
+                    <label className="beascuit-anniversary">
+                        <input
+                            type="checkbox"
+                            checked={current.anniversary === true}
+                            onChange={e => onChange({ ...current, anniversary: e.target.checked })}
+                        />
+                        4th Anniversary version
+                    </label>
+
+                    {/* one dropdown per bonus slot */}
+                    <span className="field-label" style={{ marginTop: 14 }}>
+                        Bonus effects ({slots} slot{slots === 1 ? '' : 's'})
+                    </span>
+                    <div className="beascuit-substats">
+                        {Array.from({ length: slots }, (_, i) => (
+                            <select
+                                key={i}
+                                className="input"
+                                value={current.substats[i] ?? ''}
+                                onChange={e => setSubstat(i, e.target.value)}
+                                aria-label={`Bonus effect ${i + 1}`}
+                            >
+                                <option value="">Empty</option>
+                                {options.map(o => <option key={o} value={o}>{o}</option>)}
+                            </select>
+                        ))}
+                    </div>
+                    {element && (
+                        <p className="muted" style={{ fontSize: 12, marginTop: 6 }}>
+                            Only an {element.adjective} beascuit can roll {element.name} DMG.
+                        </p>
+                    )}
+                </>
             )}
 
-            {/* the picker popup: 8 beascuits shown like a list */}
+            {/* the picker popup */}
             {picking && (
                 <div className="modal-backdrop" onClick={() => setPicking(false)}>
                     <div className="modal-card" onClick={e => e.stopPropagation()} style={{ maxWidth: 460 }}>
                         <button className="modal-close" onClick={() => setPicking(false)} aria-label="Close"><X size={20} /></button>
                         <h2 style={{ marginBottom: 12 }}>Choose a beascuit</h2>
+                        <p className="muted" style={{ fontSize: 13, marginBottom: 12 }}>
+                            Pick the type first. You set the rarity and element after.
+                        </p>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                             {BEASCUITS.map(b => {
-                                const fits = b.cookieType === cookieType;   // matches this cookie's class
+                                const fits = b.cookieType === cookieType;   // matches this cookie
                                 return (
                                     <button key={b.key} className="beascuit-row" onClick={() => pick(b.key)}>
-                                        <img src={beascuitImageUrl(b.key)} alt="" width={44} height={44} />
+                                        <BeascuitImage typeKey={b.key} element={null} anniversary={false} size={44} />
                                         <span style={{ flex: 1, textAlign: 'left', color: 'var(--color-text)', fontWeight: 600 }}>{b.name}</span>
                                         {fits && <span className="tag" style={{ color: 'var(--color-rank)' }}>Fits {cookieType}</span>}
                                     </button>

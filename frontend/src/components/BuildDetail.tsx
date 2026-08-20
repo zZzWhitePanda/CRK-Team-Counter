@@ -1,25 +1,13 @@
-// ============================================================
-// BuildDetail.tsx - the popup you get when you click a community
-// build. The card in the list only shows the two teams; this shows
-// EVERYTHING the person saved with it:
-//
-//   your team   -> level, ascension stars, 5 toppings + their
-//                  bonus stats, the topping tart, the beascuit
-//   enemy team  -> level and ascension (all you can see in-game)
-//   both teams  -> their 3 treasures
-//
-// It reads the saved JSON through readBuildDetails() so a build
-// posted before those details existed still opens, just with a
-// note saying the details weren't recorded.
-// ============================================================
+// popup showing everything saved with a community build
 
 import { X, Heart, Gem } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { Cookie, PlayerBuild, cookieImageUrl } from '../api';
 import {
     BEASCUITS, TOPPINGS, TREASURES,
-    beascuitImageUrl, toppingImageUrl, treasureImageUrl,
+    toppingImageUrl, treasureImageUrl, beascuitName, findElement,
 } from '../gear';
+import { BeascuitImage } from './BeascuitImage';
 import { LevellingBadges } from './LevellingPicker';
 import { readBuildDetails, DetailedCookieBuild, DetailedEnemyInfo } from '../buildDetails';
 import { rarityColor } from '../cookieSort';
@@ -32,7 +20,7 @@ interface Props {
     onLike?: () => void;
 }
 
-// look-ups by key, so a saved key becomes a readable name + picture
+// look up a name and picture from a saved key
 const toppingByKey = (key: string) => TOPPINGS.find(t => t.key === key);
 const beascuitByKey = (key: string) => BEASCUITS.find(b => b.key === key);
 const treasureByKey = (key: string) => TREASURES.find(t => t.key === key);
@@ -48,7 +36,7 @@ export function BuildDetail({ build, roster, onClose, onLike }: Props) {
                     <X size={20} />
                 </button>
 
-                {/* ---- who made it ---- */}
+                {/* who made it */}
                 <h2 style={{ marginBottom: 6, paddingRight: 40 }}>
                     {build.counter_team[0]} Comp
                 </h2>
@@ -78,7 +66,7 @@ export function BuildDetail({ build, roster, onClose, onLike }: Props) {
                     </p>
                 )}
 
-                {/* ---- the enemy team ---- */}
+                {/* the enemy team */}
                 <section className="detail-section">
                     <h3 className="detail-heading" style={{ color: 'var(--color-enemy)' }}>
                         Enemy team
@@ -96,7 +84,7 @@ export function BuildDetail({ build, roster, onClose, onLike }: Props) {
                     <TreasureRow keys={details.enemyTreasures} color="var(--color-enemy)" label="Enemy treasures" />
                 </section>
 
-                {/* ---- the counter team, with full builds ---- */}
+                {/* the counter team */}
                 <section className="detail-section">
                     <h3 className="detail-heading" style={{ color: 'var(--color-ally)' }}>
                         Counter team
@@ -118,7 +106,7 @@ export function BuildDetail({ build, roster, onClose, onLike }: Props) {
     );
 }
 
-// ---- one enemy cookie: portrait + level + stars ----------------
+// one enemy cookie
 function EnemyCard({ name, cookie, info }: {
     name: string; cookie?: Cookie; info?: DetailedEnemyInfo;
 }) {
@@ -144,7 +132,7 @@ function EnemyCard({ name, cookie, info }: {
     );
 }
 
-// ---- one of YOUR cookies: the whole build -----------------------
+// one of your cookies, with the full build
 function AllyCard({ name, cookie, build }: {
     name: string; cookie?: Cookie; build?: DetailedCookieBuild;
 }) {
@@ -154,7 +142,7 @@ function AllyCard({ name, cookie, build }: {
 
     return (
         <div className="detail-build" style={{ borderLeftColor: accent }}>
-            {/* who it is */}
+            {/* the cookie */}
             <div className="detail-build-head">
                 {cookie && (
                     <img src={cookieImageUrl(cookie.image_file)} alt={name}
@@ -180,7 +168,7 @@ function AllyCard({ name, cookie, build }: {
 
             {build && (
                 <div className="detail-gear">
-                    {/* the 5 toppings */}
+                    {/* toppings */}
                     <div className="detail-gear-block">
                         <span className="detail-gear-label">Toppings</span>
                         <div className="detail-topping-row">
@@ -196,7 +184,7 @@ function AllyCard({ name, cookie, build }: {
                                         {slot.substats.length > 0 && (
                                             <span className="detail-substats">
                                                 {slot.substats.map((s, j) => (
-                                                    <span key={j}>{s.stat} +{s.value}</span>
+                                                    <span key={j}>{s}</span>
                                                 ))}
                                             </span>
                                         )}
@@ -206,7 +194,7 @@ function AllyCard({ name, cookie, build }: {
                         </div>
                     </div>
 
-                    {/* the single topping tart */}
+                    {/* topping tart */}
                     <div className="detail-gear-block">
                         <span className="detail-gear-label">Tart</span>
                         {tart ? (
@@ -217,25 +205,30 @@ function AllyCard({ name, cookie, build }: {
                         ) : <span className="muted detail-none">None</span>}
                     </div>
 
-                    {/* the beascuit + its stats */}
+                    {/* beascuit */}
                     <div className="detail-gear-block">
                         <span className="detail-gear-label">Beascuit</span>
-                        {beascuit && build.beascuit ? (
-                            <span className="detail-beascuit" title={beascuit.name}>
-                                <img src={beascuitImageUrl(beascuit.key)} alt={beascuit.name}
-                                    width={30} height={30} loading="lazy" />
-                                <span>
-                                    {beascuit.name}
-                                    {build.beascuit.stats.length > 0 && (
-                                        <span className="detail-substats">
-                                            {build.beascuit.stats.map((s, j) => (
-                                                <span key={j}>{s.stat} +{s.value}</span>
-                                            ))}
-                                        </span>
-                                    )}
+                        {beascuit && build.beascuit ? (() => {
+                            const bc = build.beascuit;
+                            const fullName = beascuitName(bc.key, bc.rarity, bc.element, bc.anniversary);
+                            const element = findElement(bc.element);
+                            return (
+                                <span className="detail-beascuit" title={fullName}>
+                                    <BeascuitImage typeKey={bc.key} element={bc.element}
+                                        anniversary={bc.anniversary === true} size={30} />
+                                    <span>
+                                        <span style={element ? { color: element.color } : undefined}>{fullName}</span>
+                                        {bc.substats.length > 0 && (
+                                            <span className="detail-substats">
+                                                {bc.substats.filter(Boolean).map((s, j) => (
+                                                    <span key={j}>{s}</span>
+                                                ))}
+                                            </span>
+                                        )}
+                                    </span>
                                 </span>
-                            </span>
-                        ) : <span className="muted detail-none">None</span>}
+                            );
+                        })() : <span className="muted detail-none">None</span>}
                     </div>
                 </div>
             )}
@@ -243,7 +236,7 @@ function AllyCard({ name, cookie, build }: {
     );
 }
 
-// ---- a team's 3 treasures --------------------------------------
+// a team's 3 treasures
 function TreasureRow({ keys, color, label }: { keys: string[]; color: string; label: string }) {
     if (keys.length === 0) return null;
     return (

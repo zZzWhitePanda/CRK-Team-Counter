@@ -1,28 +1,15 @@
-// ============================================================
-// api.ts - the one place the frontend talks to the backend.
-// Each function matches one API endpoint. Pages import these
-// instead of calling fetch() themselves, so if an endpoint
-// changes only this file changes (same idea as db.ts on the
-// backend).
-// ============================================================
+// all backend calls, one function per endpoint
 
-// Where the backend lives. In development this is '' (empty), so
-// requests go to the same address and Vite's proxy forwards them
-// to localhost:4000. In production (Vercel) the backend is a
-// different server, set with the VITE_API_URL environment
-// variable when the site is built.
+// backend address, empty in development
 const API_BASE: string = import.meta.env.VITE_API_URL ?? '';
 
-// ---- login token storage --------------------------------------
-// After login the backend gives us a token. We keep it in the
-// browser's localStorage so the user stays logged in across page
-// reloads, and send it on every request that needs an account.
+// login token storage
 const TOKEN_KEY = 'crk_token';
 export function getToken(): string | null { return localStorage.getItem(TOKEN_KEY); }
 export function setToken(token: string) { localStorage.setItem(TOKEN_KEY, token); }
 export function clearToken() { localStorage.removeItem(TOKEN_KEY); }
 
-// ---- shapes of the data the API sends back --------------------
+// data shapes from the API
 
 export interface Cookie {
     cookie_id: number;
@@ -31,7 +18,19 @@ export interface Cookie {
     position: string;
     rarity: string;
     image_file: string;
-    release_date: string | null;   // 'YYYY-MM-DD' - powers the release-order sort
+    release_date: string | null;   // used by the release-order sort
+
+    // the detail popup fields, scraped from the wiki. Older cookies have
+    // no element, because elements were added to the game later on
+    elements?: string[];
+    recommended_toppings?: string[];
+    skill_name?: string | null;
+    skill_cooldown?: string | null;
+    skill_description?: string | null;
+    quote?: string | null;
+    description?: string | null;
+    traits?: string | null;
+    voice_actor?: string | null;
 }
 
 export type GearSetup = Record<string, string>;
@@ -42,7 +41,7 @@ export interface MetaTeam {
     team_cookies: string[];
     gear_setup: GearSetup | null;
     counters: string[];
-    win_rate: string; // Postgres sends NUMERIC as a string
+    win_rate: string; // postgres sends numbers as strings
     matched?: number;
     searched?: number;
     exact?: boolean;
@@ -51,30 +50,26 @@ export interface MetaTeam {
 export interface PlayerBuild {
     build_id: number;
     username: string;
-    user_id?: number;              // the author, so their name can link to /u/<id>
-    avatar?: string | null;        // the author's cookie-portrait avatar
-    avatar_data?: string | null;   // or their uploaded picture
-    titles?: Title[];              // their titles: array of { name, color }
+    user_id?: number;              // the author
+    avatar?: string | null;        // cookie portrait avatar
+    avatar_data?: string | null;   // uploaded picture
+    titles?: Title[];              // their titles
     opponent_team: string[];
     counter_team: string[];
-    // gear_setup holds the whole rich build (toppings, beascuits,
-    // treasures, enemy levels…) as free-form JSON - see BuildDetails
-    // in buildDetails.ts for the shape the submit form writes.
+    // gear_setup holds the full build as JSON, see buildDetails.ts
     gear_setup: unknown;
     note: string | null;
     likes: number;
     views?: number;
-    likedByMe?: boolean;   // only set when logged in
+    likedByMe?: boolean;   // only when logged in
     is_public?: boolean;
     created_at?: string;
     score?: number;
-    // ---- only set by the counter lookup ----
-    // The lookup returns SIMILAR teams, not just exact ones, so
-    // each result reports how much of the searched team it covers.
-    matched?: number;      // enemy cookies this build shares
-    searched?: number;     // how many were searched for
-    exact?: boolean;       // covers precisely the searched team
-    anyTeam?: boolean;     // posted with no enemy team at all
+    // only set by the counter lookup
+    matched?: number;      // enemy cookies shared
+    searched?: number;     // cookies searched for
+    exact?: boolean;       // exact match
+    anyTeam?: boolean;     // posted with no enemy team
 }
 
 export interface LookupResult {
@@ -88,11 +83,11 @@ export interface AuthUser {
     email: string;
     isAdmin: boolean;
     role: Role;
-    avatar: string | null;       // a cookie portrait filename (legacy - upload only now)
-    avatarData: string | null;   // uploaded picture, as a data URI
-    titles: Title[];             // owner-awarded badges
-    theme: unknown;              // their saved theme, or null
-    usernameChangeableAt: string | null;  // null = right now
+    avatar: string | null;       // cookie portrait filename
+    avatarData: string | null;   // uploaded picture
+    titles: Title[];             // badges
+    theme: unknown;              // saved theme
+    usernameChangeableAt: string | null;  // null = now
 }
 
 export interface Title {
@@ -100,13 +95,10 @@ export interface Title {
     color: string;
 }
 
-// What someone is allowed to do.
-//   user  - a normal player
-//   admin - can delete any community build (moderation)
-//   owner - all of that, plus titles, bans and promoting admins
+// permission level
 export type Role = 'user' | 'mod' | 'admin' | 'owner';
 
-// someone's public profile (anyone can view anyone's)
+// public profile
 export interface Profile {
     userId: number;
     username: string;
@@ -116,18 +108,18 @@ export interface Profile {
     role: Role;
     isBanned: boolean;
     banReason: string | null;
-    bannedUntil: string | null;    // ISO string, null = permanent
+    bannedUntil: string | null;    // null = permanent
     createdAt: string;
-    isMe: boolean;         // true when you're looking at your own profile
+    isMe: boolean;         // your own profile
     buildCount: number;
     totalLikes: number;
     followers: number;
     following: number;
     followedByMe: boolean;
-    viewerRole: Role;      // what the person LOOKING is allowed to do
+    viewerRole: Role;      // the viewer's role
 }
 
-// Extra fields on a profile row in the admin panel
+// extra admin panel fields
 export interface StaffUser {
     user_id: number;
     username: string;
@@ -142,7 +134,7 @@ export interface StaffUser {
     build_count: string;
 }
 
-// one entry in a followers / following list
+// a followers / following entry
 export interface FollowUser {
     user_id: number;
     username: string;
@@ -151,9 +143,9 @@ export interface FollowUser {
     titles: Title[];
 }
 
-// ---- helper: fetch + throw a readable error if it failed ------
+// fetch helper with readable errors
 async function getJson<T>(url: string, options: RequestInit = {}): Promise<T> {
-    // attach the login token (if we have one) to every request
+    // attach the login token
     const token = getToken();
     const headers = new Headers(options.headers);
     if (token) headers.set('Authorization', 'Bearer ' + token);
@@ -162,14 +154,11 @@ async function getJson<T>(url: string, options: RequestInit = {}): Promise<T> {
     try {
         response = await fetch(API_BASE + url, { ...options, headers });
     } catch {
-        // network dropped mid-request (user offline, server down)
+        // no connection
         throw new Error("Can't reach the server right now — check your connection and try again.");
     }
 
-    // Read the reply as text first, then try to turn it into JSON.
-    // If the backend is down/misconfigured the reply might be an
-    // HTML error page - parsing that with .json() would throw a
-    // confusing technical error at the user, which UC07 forbids.
+    // read as text first, the reply might not be JSON
     const text = await response.text();
     let body: unknown = null;
     try { body = JSON.parse(text); } catch { body = null; }
@@ -181,8 +170,7 @@ async function getJson<T>(url: string, options: RequestInit = {}): Promise<T> {
     return body as T;
 }
 
-// small helpers for sending JSON. POST creates, PATCH changes part
-// of something that already exists, DELETE removes it.
+// send JSON helpers
 function sendJson<T>(method: string, url: string, data: unknown): Promise<T> {
     return getJson<T>(url, {
         method,
@@ -193,9 +181,9 @@ function sendJson<T>(method: string, url: string, data: unknown): Promise<T> {
 const postJson = <T,>(url: string, data: unknown) => sendJson<T>('POST', url, data);
 const patchJson = <T,>(url: string, data: unknown) => sendJson<T>('PATCH', url, data);
 
-// ---- cookies --------------------------------------------------
+// cookies
 
-// GET /api/cookies with optional search/type/rarity filters (FR01)
+// GET /api/cookies with filters (FR01)
 export function getCookies(filters: { search?: string; type?: string; rarity?: string } = {}) {
     const params = new URLSearchParams();
     if (filters.search) params.set('search', filters.search);
@@ -205,32 +193,29 @@ export function getCookies(filters: { search?: string; type?: string; rarity?: s
     return getJson<Cookie[]>('/api/cookies' + (qs ? '?' + qs : ''));
 }
 
-// ---- counter lookup -------------------------------------------
+// counter lookup
 
-// POST /api/lookup - the counter search (FR03/FR04)
+// POST /api/lookup - counter search (FR03/FR04)
 export function lookupCounters(enemyTeam: string[], enemyGear: GearSetup) {
     return postJson<LookupResult>('/api/lookup', { enemyTeam, enemyGear });
 }
 
-// ---- community builds -----------------------------------------
+// community builds
 
-// GET /api/builds?sort=likes|views|newest|featured (FR08)
+// GET /api/builds, sorted (FR08)
 export type BuildSort = 'likes' | 'views' | 'newest' | 'featured';
 export function getBuilds(sort: BuildSort = 'likes') {
     return getJson<PlayerBuild[]>(`/api/builds?sort=${sort}`);
 }
-// old name kept for anywhere still using it
+// old name, still used in places
 export const getTopBuilds = () => getBuilds('likes');
 
-// POST /api/builds/:id/view - count a view (per-browser dedup done by caller)
+// POST /api/builds/:id/view - count a view
 export function countBuildView(buildId: number) {
     return postJson<{ views: number }>(`/api/builds/${buildId}/view`, {});
 }
 
-// POST /api/builds - submit a build (login required, FR05).
-// gearSetup carries the full build details (toppings, beascuits,
-// treasures, enemy info…) as JSON; the backend stores it as JSONB,
-// so it can be any shape - hence `unknown` rather than GearSetup.
+// POST /api/builds - submit a build (FR05)
 export function submitBuild(build: {
     opponentTeam: string[];
     counterTeam: string[];
@@ -240,12 +225,12 @@ export function submitBuild(build: {
     return postJson<PlayerBuild>('/api/builds', build);
 }
 
-// POST /api/builds/:id/like - like / unlike (login required, FR06/07)
+// POST /api/builds/:id/like - like or unlike (FR06/07)
 export function likeBuild(buildId: number) {
     return postJson<{ likes: number; likedByMe: boolean }>(`/api/builds/${buildId}/like`, {});
 }
 
-// ---- auth -----------------------------------------------------
+// auth
 
 export function signup(data: { username: string; email: string; password: string }) {
     return postJson<{ token: string; user: AuthUser }>('/api/auth/signup', data);
@@ -257,13 +242,9 @@ export function getMe() {
     return getJson<{ user: AuthUser }>('/api/auth/me');
 }
 
-// ---- profiles -------------------------------------------------
+// profiles
 
-// PATCH /api/auth/me - change your username and/or profile picture.
-// Send only what you're changing. avatar = a cookie portrait
-// filename, avatarData = an uploaded picture as a data URI; setting
-// one clears the other. The backend returns a fresh token because
-// the username is stored inside it.
+// PATCH /api/auth/me - change username or picture
 export function updateProfile(changes: {
     username?: string;
     avatar?: string | null;
@@ -272,69 +253,62 @@ export function updateProfile(changes: {
     return patchJson<{ token: string; user: AuthUser }>('/api/auth/me', changes);
 }
 
-// GET /api/users/:id - anyone's profile plus their builds.
-// Works logged out; your own private builds only appear for you.
-// Keyed by id, so renaming never breaks a saved link.
+// GET /api/users/:id - a profile and their builds
 export function getProfile(userId: number | string) {
     return getJson<{ profile: Profile; builds: PlayerBuild[] }>(
         '/api/users/' + encodeURIComponent(String(userId)));
 }
 
-// PATCH /api/builds/:id - show a build to everyone, or hide it (owner only)
+// PATCH /api/builds/:id - show or hide a build
 export function setBuildPrivacy(buildId: number, isPublic: boolean) {
     return patchJson<{ build_id: number; is_public: boolean }>(
         `/api/builds/${buildId}`, { isPublic });
 }
 
-// DELETE /api/builds/:id - remove one of your own builds
+// DELETE /api/builds/:id - delete your build
 export function deleteBuild(buildId: number) {
     return getJson<{ deleted: number }>(`/api/builds/${buildId}`, { method: 'DELETE' });
 }
 
-// ---- following ------------------------------------------------
+// following
 
-// POST /api/follows/:id - follow or unfollow (a toggle,
-// the same way the like button works)
+// POST /api/follows/:id - follow or unfollow
 export function toggleFollow(userId: number) {
     return postJson<{ username: string; following: boolean; followers: number }>(
         '/api/follows/' + userId, {});
 }
 
-// GET /api/follows/:id/followers - who follows them
+// GET /api/follows/:id/followers
 export function getFollowers(userId: number) {
     return getJson<{ username: string; users: FollowUser[] }>(
         `/api/follows/${userId}/followers`);
 }
 
-// GET /api/follows/:id/following - who they follow
+// GET /api/follows/:id/following
 export function getFollowing(userId: number) {
     return getJson<{ username: string; users: FollowUser[] }>(
         `/api/follows/${userId}/following`);
 }
 
-// ---- staff actions --------------------------------------------
-// Every one of these is checked again on the server against the
-// role stored in the database. Hiding the buttons is only tidiness;
-// the 403 is the real protection.
+// staff actions, all re-checked on the server
 
-// GET /api/users - every account (staff)
+// GET /api/users - all accounts
 export function getAllUsers() {
     return getJson<StaffUser[]>('/api/users');
 }
 
-// GET /api/users/lookup?q=... - find an account by id OR username
+// GET /api/users/lookup - find an account
 export function lookupUser(q: string) {
     return getJson<StaffUser>('/api/users/lookup?q=' + encodeURIComponent(q));
 }
 
-// POST /api/users/:id/titles - award a title. Admin can only hand
-// out the non-staff presets; owner can hand out anything.
+// POST /api/users/:id/titles - award a title
 export function addUserTitle(userId: number, name: string, color: string) {
     return postJson<{ userId: number; titles: Title[] }>(
         `/api/users/${userId}/titles`, { name, color });
 }
 
-// DELETE /api/users/:id/titles/:name - remove a title
+// DELETE /api/users/:id/titles/:name
 export function removeUserTitle(userId: number, name: string) {
     return getJson<{ userId: number; titles: Title[] }>(
         `/api/users/${userId}/titles/${encodeURIComponent(name)}`,
@@ -352,7 +326,7 @@ export function setUserBanned(userId: number, opts: {
     }>(`/api/users/${userId}/ban`, opts);
 }
 
-// ---- IP bans (owner) ----------------------------------------
+// IP bans
 export interface IpBan {
     ip: string;
     reason: string | null;
@@ -365,53 +339,50 @@ export const addIpBan       = (ip: string, reason?: string, minutes?: number | n
 export const removeIpBan    = (ip: string) =>
     getJson<{ deleted: string }>('/api/ip-bans/' + encodeURIComponent(ip), { method: 'DELETE' });
 
-// GET /api/users/me/likes - builds I've liked
+// GET /api/users/me/likes - my liked builds
 export function getLikedBuilds() {
     return getJson<PlayerBuild[]>('/api/users/me/likes');
 }
 
-// ---- themes ---------------------------------------------------
+// themes
 
 export interface SavedTheme { theme_id: number; name: string; theme: unknown; }
 
-// PUT /api/auth/me/theme - remember the theme I'm using now
+// PUT /api/auth/me/theme - save current theme
 export function saveMyTheme(theme: unknown) {
     return sendJson<{ saved: boolean }>('PUT', '/api/auth/me/theme', { theme });
 }
 
-// GET /api/auth/me/themes - my saved presets
+// GET /api/auth/me/themes - saved presets
 export function getMyThemes() {
     return getJson<SavedTheme[]>('/api/auth/me/themes');
 }
 
-// POST /api/auth/me/themes - save the current theme under a name
-// (saving over a name you've used already replaces it)
+// POST /api/auth/me/themes - save under a name
 export function saveThemePreset(name: string, theme: unknown) {
     return postJson<SavedTheme>('/api/auth/me/themes', { name, theme });
 }
 
-// DELETE /api/auth/me/themes/:id - remove one of my presets
+// DELETE /api/auth/me/themes/:id
 export function deleteThemePreset(themeId: number) {
     return getJson<{ deleted: number }>(`/api/auth/me/themes/${themeId}`, { method: 'DELETE' });
 }
 
-// ---- picture helpers ------------------------------------------
+// picture helpers
 
-// where a cookie's portrait lives (served by the backend)
+// url for a cookie portrait
 export function cookieImageUrl(imageFile: string) {
     return API_BASE + '/images/cookies/' + imageFile;
 }
 
-// Works out what to show as someone's profile picture:
-// an uploaded picture wins, then a chosen cookie portrait, then
-// null (the Avatar component falls back to their initial).
+// pick a profile picture: upload, then portrait, then none
 export function avatarUrl(
     who: { avatar?: string | null; avatarData?: string | null;
            avatar_data?: string | null } | null | undefined
 ): string | null {
     if (!who) return null;
     const uploaded = who.avatarData ?? who.avatar_data;
-    if (uploaded) return uploaded;                       // already a data: URI
+    if (uploaded) return uploaded;                       // already a data URI
     if (who.avatar) return cookieImageUrl(who.avatar);
     return null;
 }

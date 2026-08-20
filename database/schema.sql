@@ -1,15 +1,6 @@
--- ============================================================
 -- CRK Team Builder - Database Schema
 -- Flynn Zipsin - VCE Software Development SAT
---
--- This file creates all the tables for the website.
--- Run it with:  psql -d crk_team_builder -f schema.sql
---
--- The DROP statements at the top mean I can re-run this file
--- whenever I change the schema - it wipes the old tables and
--- builds fresh ones. (Order matters: tables that other tables
--- point at have to be dropped last.)
--- ============================================================
+-- Creates every table. Re-running wipes and rebuilds them.
 
 DROP TABLE IF EXISTS build_likes;
 DROP TABLE IF EXISTS user_builds;
@@ -18,57 +9,27 @@ DROP TABLE IF EXISTS cookies;
 DROP TABLE IF EXISTS users;
 
 
--- ------------------------------------------------------------
--- users
--- Holds everyone who can log in. Normal users can submit teams
--- and like them. Admins (just me for now) can also manage the
--- meta database, so there is an is_admin flag (FR from SRS 1.1).
--- The password is NEVER stored as plain text - the backend will
--- hash it first and only the hash goes in here.
--- ------------------------------------------------------------
+-- users. passwords are stored hashed, never as plain text
 CREATE TABLE users (
     user_id       SERIAL PRIMARY KEY,           -- auto-numbered ID
     username      VARCHAR(30)  UNIQUE NOT NULL, -- shown next to their builds
     email         VARCHAR(255) UNIQUE NOT NULL, -- used to log in
     password_hash VARCHAR(255) NOT NULL,        -- hashed password, never plain text
     is_admin      BOOLEAN DEFAULT FALSE,        -- TRUE = can edit meta_teams
-    -- profile picture, option 1: the filename of a COOKIE portrait
-    -- (e.g. 'shadow-milk-cookie.png') picked from the roster.
+    -- picture option 1: a cookie portrait filename
     avatar        VARCHAR(100),
-    -- profile picture, option 2: a picture the user uploaded, stored
-    -- as a data URI ('data:image/jpeg;base64,...').
-    --
-    -- Storing the image IN the database looks odd at first, but it is
-    -- the right call here: the free Render hosting wipes the server's
-    -- disk every time it restarts, so an uploaded FILE would silently
-    -- disappear. The browser shrinks every upload to 128x128 and
-    -- re-compresses it before sending, so a row is only ~15 KB.
-    -- TEXT (not VARCHAR(n)) because the length varies; the backend
-    -- rejects anything over 200 KB.
+    -- picture option 2: an uploaded picture, as a data URI.
+    -- kept in the database because the free hosting wipes its disk
     avatar_data   TEXT,
-    -- a badge next to their name ('OG', 'Owner', …). Only an admin
-    -- can set this, so players can't award themselves one.
+    -- a badge next to their name, set by an admin
     title         VARCHAR(20),
-    -- when the username was last changed. A profile lives at
-    -- /u/<username>, so every rename breaks the old link - the
-    -- backend uses this to allow only one change every 3 days.
+    -- when they last renamed, for the cooldown
     username_changed_at TIMESTAMP,
     created_at    TIMESTAMP DEFAULT NOW()
 );
 
 
--- ------------------------------------------------------------
--- cookies
--- The full roster of cookies. This table fills the drop-down
--- menus on the Counter Tool page and the roster on the Cookies
--- page (FR01). The type/position/rarity columns are what the
--- Cookies page filters on (see mockup 3).
---
--- The roster itself is loaded from cookies_seed.sql, which is
--- GENERATED from cookie_data.json (scraped from the CRK wiki)
--- by generate_cookie_seed.js. image_file matches a picture in
--- assets/cookie-images/ fetched by download_images.js.
--- ------------------------------------------------------------
+-- cookies. the full roster (FR01), loaded by cookies_seed.sql
 CREATE TABLE cookies (
     cookie_id  SERIAL PRIMARY KEY,
     name       VARCHAR(50) UNIQUE NOT NULL,  -- e.g. 'Shadow Milk Cookie'
@@ -76,15 +37,23 @@ CREATE TABLE cookies (
     position   VARCHAR(10) NOT NULL,         -- Front, Middle or Rear
     rarity     VARCHAR(20) NOT NULL,         -- Common up to Beast
     image_file VARCHAR(100),                 -- portrait in assets/cookie-images/
-    -- the day the cookie was added to the game. This powers the
-    -- "Release order" option in the roster's Sort by menu, which
-    -- groups the cookies by the year they came out.
+    -- release date, used by the release order sort
     release_date DATE,
 
-    -- CHECK rules so bad data can't sneak in - Postgres rejects
-    -- any row where these are not one of the allowed values.
-    -- (BTS is the collab idol type; Dragon/Witch are rarities
-    -- the wiki lists that my original SRS table didn't have.)
+    -- the detail popup fields, scraped from the wiki by
+    -- scrape_cookie_details.js. elements is an array because a few
+    -- cookies carry more than one, and empty for older cookies
+    elements TEXT[] NOT NULL DEFAULT '{}',
+    recommended_toppings TEXT[] NOT NULL DEFAULT '{}',
+    skill_name TEXT,
+    skill_cooldown TEXT,
+    skill_description TEXT,
+    quote TEXT,
+    description TEXT,
+    traits TEXT,
+    voice_actor TEXT,
+
+    -- CHECK rules so only valid values can be saved
     CONSTRAINT valid_type CHECK
         (type IN ('Charge','Defense','Magic','Ambush','Support',
                   'Bomber','Ranged','Healing','BTS')),
@@ -96,23 +65,8 @@ CREATE TABLE cookies (
 );
 
 
--- ------------------------------------------------------------
--- meta_teams
--- The teams I maintain as the admin, based on the current meta.
--- The important design decision (from SRS 6.7) is that the
--- cookie lists are stored as Postgres ARRAYS (TEXT[]). That
--- lets the lookup use the "contains" operator @> which checks
--- whether one list sits inside another NO MATTER WHAT ORDER
--- the cookies were picked in. Example:
---     WHERE counters @> ARRAY['Hollyberry Cookie','Pure Vanilla Cookie']
--- matches any team whose counters list includes both of those,
--- in any order.
---
--- gear_setup is JSONB - a small lookup of cookie name -> gear,
--- e.g. {"Shadow Milk Cookie": "Swift Chocolate"}. JSONB is used
--- because the pseudocode needs to look up gear BY cookie name
--- (team.gear_setup[cookie]) for the gear-match bonus (FR02).
--- ------------------------------------------------------------
+-- meta_teams, the admin-maintained counter database (SRS 6.7).
+-- the cookie lists are arrays so the lookup can ignore order
 CREATE TABLE meta_teams (
     meta_team_id SERIAL PRIMARY KEY,
     team_name    VARCHAR(100) NOT NULL,     -- a label like 'Shadow Milk Burst Comp'
@@ -122,27 +76,17 @@ CREATE TABLE meta_teams (
     win_rate     NUMERIC(5,2) NOT NULL,     -- e.g. 78.50
     created_at   TIMESTAMP DEFAULT NOW(),
 
-    -- win rate must be a real percentage (SRS: 0 to 100)
+    -- 0 to 100
     CONSTRAINT valid_win_rate CHECK (win_rate >= 0 AND win_rate <= 100),
 
-    -- a team is 1 to 5 cookies, never empty and never more than 5
+    -- a team is 1 to 5 cookies
     CONSTRAINT team_size CHECK
         (array_length(team_cookies, 1) BETWEEN 1 AND 5)
 );
 
 
--- ------------------------------------------------------------
--- user_builds
--- Community-submitted counter teams (FR05). Each build stores
--- WHO made it (user_id points at the users table), the enemy
--- team it beats, the counter team to use, gear, and a note of
--- up to 1000 characters (checked again by the backend).
---
--- likes is stored as a plain number on the row so sorting by
--- likes is fast (FR07 says the count is re-saved on the team
--- every time someone likes it). The build_likes table below is
--- what stops double-liking.
--- ------------------------------------------------------------
+-- user_builds, the community-submitted counter teams (FR05).
+-- likes is kept on the row so sorting by likes is fast (FR07)
 CREATE TABLE user_builds (
     build_id      SERIAL PRIMARY KEY,
     user_id       INTEGER NOT NULL REFERENCES users(user_id)
@@ -152,8 +96,7 @@ CREATE TABLE user_builds (
     gear_setup    JSONB,                   -- cookie name -> gear type
     note          VARCHAR(1000),           -- 'how this team works' (max 1000 chars, FR05)
     likes         INTEGER DEFAULT 0,       -- kept up to date by the backend (FR07)
-    -- TRUE = anyone can see this build, FALSE = only its owner.
-    -- The owner can flip this from their profile page.
+    -- TRUE = public, FALSE = only the owner can see it
     is_public     BOOLEAN DEFAULT TRUE,
     created_at    TIMESTAMP DEFAULT NOW(),
 
@@ -164,13 +107,7 @@ CREATE TABLE user_builds (
 );
 
 
--- ------------------------------------------------------------
--- build_likes
--- One row per like. The UNIQUE rule on (user_id, build_id) is
--- the databases way of enforcing FR06: the same user simply
--- CANNOT like the same build twice - Postgres refuses the
--- second row. This is safer than only checking in code.
--- ------------------------------------------------------------
+-- build_likes, one row per like. UNIQUE stops double-liking (FR06)
 CREATE TABLE build_likes (
     like_id  SERIAL PRIMARY KEY,
     user_id  INTEGER NOT NULL REFERENCES users(user_id)      ON DELETE CASCADE,
@@ -181,14 +118,8 @@ CREATE TABLE build_likes (
 );
 
 
--- ------------------------------------------------------------
--- follows
--- One row per "A follows B". Two rules are enforced by the
--- DATABASE rather than only in code:
---   * UNIQUE (follower_id, following_id) stops the same person
---     being followed twice (same idea as build_likes).
---   * no_self_follow stops you following yourself.
--- ------------------------------------------------------------
+-- follows, one row per "A follows B".
+-- the database blocks following twice or following yourself
 CREATE TABLE follows (
     follow_id    SERIAL PRIMARY KEY,
     follower_id  INTEGER NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
@@ -200,20 +131,13 @@ CREATE TABLE follows (
 );
 
 
--- ------------------------------------------------------------
--- Indexes (NFR02 + NFR08: keep lookups fast as the data grows)
---
--- GIN indexes are the special index type Postgres uses for
--- arrays - they make the @> "contains" checks in the counter
--- lookup fast instead of scanning every row.
--- The likes index keeps "ORDER BY likes DESC" (community
--- results + top teams list) quick.
--- ------------------------------------------------------------
+-- indexes, to keep lookups fast (NFR02, NFR08).
+-- GIN is the index type Postgres uses for arrays
 CREATE INDEX idx_meta_teams_counters   ON meta_teams  USING GIN (counters);
 CREATE INDEX idx_user_builds_opponent  ON user_builds USING GIN (opponent_team);
 CREATE INDEX idx_user_builds_likes     ON user_builds (likes DESC);
+CREATE INDEX idx_cookies_elements      ON cookies    USING GIN (elements);
 
--- "how many followers does B have" and "who does A follow" are
--- asked on every profile page, so both columns get an index.
+-- both are read on every profile page
 CREATE INDEX idx_follows_following     ON follows (following_id);
 CREATE INDEX idx_follows_follower      ON follows (follower_id);

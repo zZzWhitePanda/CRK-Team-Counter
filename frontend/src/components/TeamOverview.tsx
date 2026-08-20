@@ -1,26 +1,16 @@
-// ============================================================
-// TeamOverview.tsx - an at-a-glance summary of a team's builds.
-//
-// Without this you have to open each cookie's Build popup one at a
-// time to remember what you set. This shows the whole team on the
-// page: level, stars, the five toppings, the tart and the beascuit
-// for every cookie at once.
-//
-// Deliberately NOT showing sub-stat numbers - that's what the
-// build popup is for, and putting them here would make it a wall
-// of text rather than something you can scan.
-// ============================================================
+// a summary of the whole team's builds
 
 import { Gem } from 'lucide-react';
 import { Cookie, cookieImageUrl } from '../api';
 import {
     CookieBuild, TeamTreasures, TOPPINGS, BEASCUITS, TREASURES,
-    toppingImageUrl, beascuitImageUrl, treasureImageUrl, toppingBoardUrl,
+    toppingImageUrl, treasureImageUrl, toppingBoardUrl, beascuitName,
 } from '../gear';
+import { BeascuitImage } from './BeascuitImage';
 import { LevellingBadges } from './LevellingPicker';
 
 interface Props {
-    /** cookie names in team order; '' for an empty slot */
+    // cookie names in team order, '' if empty
     team: string[];
     builds: CookieBuild[];
     roster: Cookie[];
@@ -29,7 +19,7 @@ interface Props {
 }
 
 export function TeamOverview({ team, builds, roster, treasures, onEdit }: Props) {
-    // only the slots that actually have a cookie in them
+    // slots with a cookie in them
     const filled = team
         .map((name, i) => ({ name, index: i }))
         .filter(s => s.name);
@@ -81,7 +71,7 @@ export function TeamOverview({ team, builds, roster, treasures, onEdit }: Props)
     );
 }
 
-// ---- one cookie's summary --------------------------------------
+// one cookie's summary
 function OverviewCard({ name, cookie, build, onEdit }: {
     name: string;
     cookie?: Cookie;
@@ -93,8 +83,7 @@ function OverviewCard({ name, cookie, build, onEdit }: {
     const beascuit = build?.beascuit ? BEASCUITS.find(b => b.key === build.beascuit!.key) : null;
     const tart = build?.tart ? TOPPINGS.find(t => t.key === build.tart) : null;
 
-    // "nothing has been set on this cookie yet" - worth calling out
-    // so an empty card doesn't just look broken
+    // nothing set on this cookie yet
     const untouched = filledToppings === 0 && !tart && !beascuit;
 
     return (
@@ -124,8 +113,7 @@ function OverviewCard({ name, cookie, build, onEdit }: {
                 </p>
             ) : (
                 <div className="overview-gear">
-                    {/* the star board, showing the tart skin, with the
-                        five topping icons laid over its points */}
+                    {/* the star board with the toppings on it */}
                     <span className="overview-board" title={
                         tart ? `${tart.name} Tart` : 'No Topping Tart'
                     }>
@@ -154,9 +142,12 @@ function OverviewCard({ name, cookie, build, onEdit }: {
                                     {tart.name}
                                 </span>
                             )}
-                            {beascuit && (
-                                <span className="overview-tag" title={beascuit.name}>
-                                    <img src={beascuitImageUrl(beascuit.key)} alt="" width={16} height={16} />
+                            {beascuit && build?.beascuit && (
+                                <span className="overview-tag" title={beascuitName(
+                                    build.beascuit.key, build.beascuit.rarity,
+                                    build.beascuit.element, build.beascuit.anniversary)}>
+                                    <BeascuitImage typeKey={build.beascuit.key} element={build.beascuit.element}
+                                        anniversary={build.beascuit.anniversary === true} size={16} />
                                     {beascuit.name}
                                 </span>
                             )}
