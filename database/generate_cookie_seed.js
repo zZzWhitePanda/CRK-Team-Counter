@@ -31,10 +31,14 @@ let sql = `-- Cookie roster seed. GENERATED FILE - don't edit by hand.
 
 TRUNCATE cookies RESTART IDENTITY CASCADE;
 
-INSERT INTO cookies (name, type, position, rarity, image_file, release_date,
+`;
+
+const insertHeader =
+`INSERT INTO cookies (name, type, position, rarity, image_file, release_date,
                      elements, recommended_toppings, skill_name, skill_cooldown,
                      skill_description, quote, description, traits, voice_actor) VALUES
 `;
+sql += insertHeader;
 
 // a Postgres text array, e.g. ARRAY['earth']::text[]
 function sqlArray(values) {
@@ -59,7 +63,14 @@ const rows = cookies.map(c =>
     `${sqlOrNull(c.description)}, ${sqlOrNull(c.traits)}, ${sqlOrNull(c.voiceActor)})`
 );
 
-sql += rows.join(',\n') + ';\n';
+// The rows go out in batches rather than one huge INSERT. neon_load.py
+// sends each statement over HTTPS, and a single 97 KB statement is more
+// than that endpoint reliably accepts.
+const BATCH = 15;
+for (let i = 0; i < rows.length; i += BATCH) {
+    if (i > 0) sql += '\n\n' + insertHeader;
+    sql += rows.slice(i, i + BATCH).join(',\n') + ';\n';
+}
 
 // 5. save it
 fs.writeFileSync('cookies_seed.sql', sql);
